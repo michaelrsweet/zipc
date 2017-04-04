@@ -56,7 +56,7 @@ main(int  argc,				/* I - Number of command-line arguments */
   int		i;			/* Looping var */
   FILE		*fp;			/* File to read from */
   unsigned char	buffer[8192];		/* Write buffer */
-  int		bytes;			/* Bytes read */
+  size_t	bytes;			/* Bytes read */
 
 
  /*

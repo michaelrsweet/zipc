@@ -28,7 +28,7 @@
 #
 
 CC	=	gcc
-CFLAGS	=	-g
+CFLAGS	=	-g -Wall
 LIBS	=	-lz
 OBJS	=	testzipc.o zipc.o
 

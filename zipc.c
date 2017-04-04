@@ -48,20 +48,12 @@
 
 #define ZIPC_LOCAL_HEADER  0x04034b50	/* Start of a local file header */
 #define ZIPC_DIR_HEADER    0x02014b50	/* File header in central directory */
-#define ZIPC_DIGITAL_SIG   0x05054b50	/* Digital signature at end */
 #define ZIPC_END_RECORD    0x06054b50	/* End of central directory record */
 
 #define ZIPC_MADE_BY       0x0314	/* Version made by UNIX using zip 2.0 */
 #define ZIPC_VERSION       0x0014	/* Version needed: 2.0 */
 
-#define ZIPC_FLAG_NONE     0		/* No flags */
-
-#define ZIPC_FLAG_CMASK    0x0006	/* Compression fields */
-#define ZIPC_FLAG_CNORMAL  0x0000	/* Normal compression */
 #define ZIPC_FLAG_CMAX     0x0002	/* Maximum compression */
-#define ZIPC_FLAG_CFAST    0x0004	/* Fast compression */
-#define ZIPC_FLAG_CSUPER   0x0006	/* Super fast compression */
-
 #define ZIPC_FLAG_DATA     0x0008	/* Length and CRC-32 fields follow data */
 
 #define ZIPC_COMP_STORE    0		/* No compression */
@@ -76,11 +68,11 @@ struct _zipc_s
 {
   FILE		*fp;			/* ZIP file */
   const char	*error;			/* Last error message */
-  int		alloc_files,		/* Allocated file entries in ZIP */
+  size_t	alloc_files,		/* Allocated file entries in ZIP */
 		num_files;		/* Number of file entries in ZIP */
   zipc_file_t	*files;			/* File entries in ZIP */
-  unsigned int	modtime;		/* MS-DOS modification date/time */
   z_stream	stream;			/* Deflate stream for current file */
+  unsigned int	modtime;		/* MS-DOS modification date/time */
   char		buffer[16384];		/* Deflate output buffer */
 };
 
@@ -141,9 +133,9 @@ zipcClose(zipc_t *zc)			/* I - ZIP container */
   status |= zipc_write_u32(zc, ZIPC_END_RECORD);
   status |= zipc_write_u16(zc, 0); /* Disk number */
   status |= zipc_write_u16(zc, 0); /* Disk number containing directory */
-  status |= zipc_write_u16(zc, zc->num_files);
-  status |= zipc_write_u16(zc, zc->num_files);
-  status |= zipc_write_u32(zc, end - start);
+  status |= zipc_write_u16(zc, (unsigned)zc->num_files);
+  status |= zipc_write_u16(zc, (unsigned)zc->num_files);
+  status |= zipc_write_u32(zc, (unsigned)(end - start));
   status |= zipc_write_u32(zc, (unsigned)start);
   status |= zipc_write_u16(zc, 0); /* file comment length */
 
@@ -215,7 +207,7 @@ zipcCreateFileWithString(
   {
     zf->uncompressed_size = len;
     zf->compressed_size   = len;
-    zf->crc32             = crc32(zf->crc32, (const Bytef *)contents, len);
+    zf->crc32             = crc32(zf->crc32, (const Bytef *)contents, (unsigned)len);
 
     status |= zipc_write_local_header(zc, zf);
     status |= zipc_write(zc, contents, len);
@@ -262,8 +254,8 @@ zipcFileFinish(zipc_file_t *zf)		/* I - ZIP container file */
         break;
       }
 
-      status |= zipc_write(zf->zc, zc->buffer, (char *)zc->stream.next_out - zc->buffer);
-      zf->compressed_size += (char *)zc->stream.next_out - zc->buffer;
+      status |= zipc_write(zf->zc, zc->buffer, (size_t)((char *)zc->stream.next_out - zc->buffer));
+      zf->compressed_size += (size_t)((char *)zc->stream.next_out - zc->buffer);
 
       zc->stream.next_out  = (Bytef *)zc->buffer;
       zc->stream.avail_out = sizeof(zc->buffer);
@@ -271,8 +263,8 @@ zipcFileFinish(zipc_file_t *zf)		/* I - ZIP container file */
 
     if ((char *)zc->stream.next_out > zc->buffer)
     {
-      status |= zipc_write(zf->zc, zc->buffer, (char *)zc->stream.next_out - zc->buffer);
-      zf->compressed_size += (char *)zc->stream.next_out - zc->buffer;
+      status |= zipc_write(zf->zc, zc->buffer, (size_t)((char *)zc->stream.next_out - zc->buffer));
+      zf->compressed_size += (size_t)((char *)zc->stream.next_out - zc->buffer);
     }
 
     deflateEnd(&zc->stream);
@@ -355,7 +347,7 @@ zipcFileWrite(zipc_file_t *zf,		/* I - ZIP container file */
 
 
   zf->uncompressed_size += bytes;
-  zf->crc32             = crc32(zf->crc32, (const Bytef *)data, bytes);
+  zf->crc32             = crc32(zf->crc32, (const Bytef *)data, (unsigned)bytes);
 
   if (zf->method == ZIPC_COMP_STORE)
   {
@@ -381,8 +373,8 @@ zipcFileWrite(zipc_file_t *zf,		/* I - ZIP container file */
     {
       if (zc->stream.avail_out < (int)(sizeof(zc->buffer) / 8))
       {
-	status |= zipc_write(zf->zc, zc->buffer, (char *)zc->stream.next_out - zc->buffer);
-	zf->compressed_size += (char *)zc->stream.next_out - zc->buffer;
+	status |= zipc_write(zf->zc, zc->buffer, (size_t)((char *)zc->stream.next_out - zc->buffer));
+	zf->compressed_size += (size_t)((char *)zc->stream.next_out - zc->buffer);
 
 	zc->stream.next_out  = (Bytef *)zc->buffer;
 	zc->stream.avail_out = sizeof(zc->buffer);
@@ -525,7 +517,7 @@ zipcFileXMLPrintf(
   }
 
   if (bufptr > buffer)
-    status |= zipcFileWrite(zf, buffer, bufptr - buffer);
+    status |= zipcFileWrite(zf, buffer, (size_t)(bufptr - buffer));
 
   return (status);
 }
@@ -589,12 +581,12 @@ zipcOpen(const char *filename,		/* I - Filename of container */
     curtime = time(NULL);
     curdate = gmtime(&curtime);
 
-    zc->modtime = curdate->tm_sec |
-                  (curdate->tm_min << 5) |
-                  (curdate->tm_hour << 11) |
-                  (curdate->tm_mday << 16) |
-                  ((curdate->tm_mon + 1) << 21) |
-                  ((curdate->tm_year - 80) << 25);
+    zc->modtime = (unsigned)curdate->tm_sec |
+                  ((unsigned)curdate->tm_min << 5) |
+                  ((unsigned)curdate->tm_hour << 11) |
+                  ((unsigned)curdate->tm_mday << 16) |
+                  ((unsigned)(curdate->tm_mon + 1) << 21) |
+                  ((unsigned)(curdate->tm_year - 80) << 25);
   }
 
   return (zc);
@@ -644,7 +636,7 @@ zipc_add_file(zipc_t     *zc,		/* I - ZIP container */
 
   temp->zc     = zc;
   temp->crc32  = crc32(0, NULL, 0);
-  temp->offset = ftell(zc->fp);
+  temp->offset = (size_t)ftell(zc->fp);
 
   if (compression)
   {
@@ -703,15 +695,15 @@ zipc_write_dir_header(
   status |= zipc_write_u16(zc, zf->method);
   status |= zipc_write_u32(zc, zc->modtime);
   status |= zipc_write_u32(zc, zf->crc32);
-  status |= zipc_write_u32(zc, zf->compressed_size);
-  status |= zipc_write_u32(zc, zf->uncompressed_size);
-  status |= zipc_write_u16(zc, filenamelen);
+  status |= zipc_write_u32(zc, (unsigned)zf->compressed_size);
+  status |= zipc_write_u32(zc, (unsigned)zf->uncompressed_size);
+  status |= zipc_write_u16(zc, (unsigned)filenamelen);
   status |= zipc_write_u16(zc, 0); /* extra field length */
   status |= zipc_write_u16(zc, 0); /* comment length */
   status |= zipc_write_u16(zc, 0); /* disk number start */
   status |= zipc_write_u16(zc, 0); /* internal file attributes */
   status |= zipc_write_u32(zc, 0); /* external file attributes */
-  status |= zipc_write_u32(zc, zf->offset);
+  status |= zipc_write_u32(zc, (unsigned)zf->offset);
   status |= zipc_write(zc, zf->filename, filenamelen);
 
   return (status);
@@ -741,9 +733,9 @@ zipc_write_local_header(
   status |= zipc_write_u16(zc, zf->method);
   status |= zipc_write_u32(zc, zc->modtime);
   status |= zipc_write_u32(zc, zf->uncompressed_size == 0 ? 0 : zf->crc32);
-  status |= zipc_write_u32(zc, zf->compressed_size);
-  status |= zipc_write_u32(zc, zf->uncompressed_size);
-  status |= zipc_write_u16(zc, filenamelen);
+  status |= zipc_write_u32(zc, (unsigned)zf->compressed_size);
+  status |= zipc_write_u32(zc, (unsigned)zf->uncompressed_size);
+  status |= zipc_write_u16(zc, (unsigned)filenamelen);
   status |= zipc_write_u16(zc, 0); /* extra field length */
   status |= zipc_write(zc, zf->filename, filenamelen);
 
@@ -764,8 +756,8 @@ zipc_write_local_trailer(
 
 
   status |= zipc_write_u32(zc, zf->crc32);
-  status |= zipc_write_u32(zc, zf->compressed_size);
-  status |= zipc_write_u32(zc, zf->uncompressed_size);
+  status |= zipc_write_u32(zc, (unsigned)zf->compressed_size);
+  status |= zipc_write_u32(zc, (unsigned)zf->uncompressed_size);
 
   return (status);
 }
