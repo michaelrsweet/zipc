@@ -10,7 +10,7 @@ I'm providing this as open source under the "new" 2-clause BSD license which
 allows you do pretty much do whatever you like with it.  Please do provide
 feedback and report bugs to the Github project page at:
 
-    https://github.com/michaelrsweet/zipc/issues
+    https://github.com/michaelrsweet/zipc
 
 so that everyone can benefit.
 
