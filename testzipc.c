@@ -97,7 +97,7 @@ main(int  argc,				/* I - Number of command-line arguments */
   * Create a file and write using a bunch of different functions...
   */
 
-  if ((zf = zipcCreateFile(zc, "testzipc.xml", 1)) != NULL)
+  if ((zf = zipcCreateFile(zc, "testzipc.xml", 0)) != NULL)
   {
     puts("zipcCreateFile(testzipc.xml): OK");
 

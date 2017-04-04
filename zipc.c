@@ -51,8 +51,8 @@
 #define ZIPC_DIGITAL_SIG   0x05054b50	/* Digital signature at end */
 #define ZIPC_END_RECORD    0x06054b50	/* End of central directory record */
 
-#define ZIPC_MADE_BY       0		/* Version made by value */
-#define ZIPC_VERSION       0x0200	/* Version needed: 2.0 */
+#define ZIPC_MADE_BY       0x0314	/* Version made by UNIX using zip 2.0 */
+#define ZIPC_VERSION       0x0014	/* Version needed: 2.0 */
 
 #define ZIPC_FLAG_NONE     0		/* No flags */
 
@@ -66,9 +66,6 @@
 
 #define ZIPC_COMP_STORE    0		/* No compression */
 #define ZIPC_COMP_DEFLATE  8		/* Deflate compression */
-
-#define ZIPC_CRC32_MAGIC   0xdebb20e3	/* "Magic number" for CRC-32 algorithm */
-#define ZIPC_CRC32_INIT    0xffffffff	/* Initial value for CRC-32 */
 
 
 /*
@@ -417,15 +414,120 @@ zipcFileWrite(zipc_file_t *zf,		/* I - ZIP container file */
  * ("%s") are escaped as needed.
  */
 
-int
+int					/* O - 0 on success, -1 on error */
 zipcFileXMLPrintf(
     zipc_file_t *zf,			/* I - ZIP container file */
     const char  *format,		/* I - Printf-style format string */
     ...)				/* I - Additional arguments as needed */
 {
-  zf->zc->error = "XML printf not yet implemented";
+  int		status = 0;		/* Return status */
+  va_list	ap;			/* Pointer to additional arguments */
+  char		buffer[65536],		/* Buffer */
+		*bufend = buffer + sizeof(buffer) - 6,
+					/* End of buffer less "&quot;" */
+		*bufptr = buffer;	/* Pointer into buffer */
+  const char	*s;			/* String pointer */
+  int		d;			/* Number */
 
-  return (-1);
+
+  va_start(ap, format);
+
+  while (*format && bufptr < bufend)
+  {
+    if (*format == '%')
+    {
+      format ++;
+
+      switch (*format)
+      {
+        case '%' : /* Substitute a single % */
+            format ++;
+
+            *bufptr++ = '%';
+            break;
+
+        case 'd' : /* Substitute a single integer */
+            format ++;
+
+            d = va_arg(ap, int);
+            snprintf(bufptr, bufend - bufptr, "%d", d);
+            bufptr += strlen(bufptr);
+            break;
+
+        case 's' : /* Substitute a single string */
+            format ++;
+
+            s = va_arg(ap, const char *);
+            while (*s && bufptr < bufend)
+            {
+              switch (*s)
+              {
+                case '&' : /* &amp; */
+                    *bufptr++ = '&';
+                    *bufptr++ = 'a';
+                    *bufptr++ = 'm';
+                    *bufptr++ = 'p';
+                    *bufptr++ = ';';
+                    break;
+                case '<' : /* &lt; */
+                    *bufptr++ = '&';
+                    *bufptr++ = 'l';
+                    *bufptr++ = 't';
+                    *bufptr++ = ';';
+                    break;
+                case '>' : /* &gt; */
+                    *bufptr++ = '&';
+                    *bufptr++ = 'g';
+                    *bufptr++ = 't';
+                    *bufptr++ = ';';
+                    break;
+                case '\"' : /* &quot; */
+                    *bufptr++ = '&';
+                    *bufptr++ = 'q';
+                    *bufptr++ = 'u';
+                    *bufptr++ = 'o';
+                    *bufptr++ = 't';
+                    *bufptr++ = ';';
+                    break;
+                default :
+                    *bufptr++ = *s;
+                    break;
+              }
+
+              s ++;
+            }
+
+            if (*s)
+            {
+	      format += strlen(format);
+              status = -1;
+              zf->zc->error = "Not enough memory to hold XML string.";
+            }
+            break;
+
+        default : /* Something else we don't support... */
+            format += strlen(format);
+            status = -1;
+            zf->zc->error = "Unsupported format character - only %%, %d, and %s are supported.";
+            break;
+      }
+    }
+    else
+      *bufptr++ = *format++;
+  }
+
+  va_end(ap);
+
+  if (*format)
+  {
+    status = -1;
+    zf->zc->error = "Not enough memory to hold XML string.";
+  }
+
+  if (bufptr > buffer)
+    status |= zipcFileWrite(zf, buffer, bufptr - buffer);
+
+  return (status);
 }
 
 
@@ -541,7 +643,7 @@ zipc_add_file(zipc_t     *zc,		/* I - ZIP container */
   strncpy(temp->filename, filename, sizeof(temp->filename) - 1);
 
   temp->zc     = zc;
-  temp->crc32  = ZIPC_CRC32_INIT;
+  temp->crc32  = crc32(0, NULL, 0);
   temp->offset = ftell(zc->fp);
 
   if (compression)
@@ -553,7 +655,7 @@ zipc_add_file(zipc_t     *zc,		/* I - ZIP container */
     zc->stream.zfree  = (free_func)0;
     zc->stream.opaque = (voidpf)0;
 
-    deflateInit(&zc->stream, 9);
+    deflateInit2(&zc->stream, Z_BEST_COMPRESSION, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY);
 
     zc->stream.next_out  = (Bytef *)zc->buffer;
     zc->stream.avail_out = sizeof(zc->buffer);
