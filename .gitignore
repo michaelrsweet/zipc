@@ -1,5 +1,5 @@
+*.dSYM
+*.o
 dumpzip
 testzipc
 testzipc.dat
-testzipc.o
-zipc.o
