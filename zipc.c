@@ -50,14 +50,21 @@
 #define ZIPC_DIR_HEADER    0x02014b50	/* File header in central directory */
 #define ZIPC_END_RECORD    0x06054b50	/* End of central directory record */
 
-#define ZIPC_MADE_BY       0x0314	/* Version made by UNIX using zip 2.0 */
-#define ZIPC_VERSION       0x0014	/* Version needed: 2.0 */
+#define ZIPC_MADE_BY       0x031e	/* Version made by UNIX using zip 2.0 */
+#define ZIPC_DIR_VERSION   0x000a	/* Version needed: 1.0 */
+#define ZIPC_FILE_VERSION  0x0014	/* Version needed: 2.0 */
 
 #define ZIPC_FLAG_CMAX     0x0002	/* Maximum compression */
 #define ZIPC_FLAG_DATA     0x0008	/* Length and CRC-32 fields follow data */
 
 #define ZIPC_COMP_STORE    0		/* No compression */
 #define ZIPC_COMP_DEFLATE  8		/* Deflate compression */
+
+#define ZIPC_INTERNAL_BIN  0x0000	/* Internal attributes = binary */
+#define ZIPC_INTERNAL_TEXT 0x0001	/* Internal attributes = text */
+
+#define ZIPC_EXTERNAL_DIR  0x41ed0010	/* External attributes = directory */
+#define ZIPC_EXTERNAL_FILE 0x81a40000	/* External attributes = file */
 
 
 /*
@@ -86,6 +93,8 @@ struct _zipc_file_s
   size_t	compressed_size;	/* Size of file (compressed) */
   size_t	uncompressed_size;	/* Size of file (uncompressed) */
   size_t	offset;			/* Offset of this entry in file */
+  unsigned short internal_attrs;	/* Internal attributes */
+  unsigned int	external_attrs;		/* External attributes */
 };
 
 
@@ -152,6 +161,42 @@ zipcClose(zipc_t *zc)			/* I - ZIP container */
 
 
 /*
+ * 'zipcCreateDirectory()' - Create a directory in a ZIP container.
+ *
+ * The "filename" value is the path within the ZIP container.  Directories are
+ * separated by the forward slash ("/").
+ */
+
+int					/* O - 0 on success, -1 on error */
+zipcCreateDirectory(
+    zipc_t     *zc,			/* I - ZIP container */
+    const char *filename)		/* I - Directory name */
+{
+  zipc_file_t	*zf = zipc_add_file(zc, filename, 0);
+					/* ZIP container file */
+  int		status = 0;		/* Return status */
+
+
+  if (zf)
+  {
+    char *end = zf->filename + strlen(zf->filename);
+
+    if (end > zf->filename && end < (zf->filename + sizeof(zf->filename) - 1) && end[-1] != '/')
+      *end = '/';
+
+    zf->crc32          = 0;
+    zf->external_attrs = ZIPC_EXTERNAL_DIR;
+
+    status |= zipc_write_local_header(zc, zf);
+  }
+  else
+    status = -1;
+
+  return (status);
+}
+
+
+/*
  * 'zipcCreateFile()' - Create a ZIP container file.
  *
  * The "filename" value is the path within the ZIP container.  Directories are
@@ -174,6 +219,7 @@ zipcCreateFile(
   zipc_file_t	*zf = zipc_add_file(zc, filename, compressed);
 					/* ZIP container file */
 
+  zf->external_attrs = ZIPC_EXTERNAL_FILE;
 
   if (zipc_write_local_header(zc, zf))
     return (NULL);
@@ -208,6 +254,8 @@ zipcCreateFileWithString(
     zf->uncompressed_size = len;
     zf->compressed_size   = len;
     zf->crc32             = crc32(zf->crc32, (const Bytef *)contents, (unsigned)len);
+    zf->internal_attrs       = ZIPC_INTERNAL_TEXT;
+    zf->external_attrs    = ZIPC_EXTERNAL_FILE;
 
     status |= zipc_write_local_header(zc, zf);
     status |= zipc_write(zc, contents, len);
@@ -304,6 +352,8 @@ zipcFilePrintf(zipc_file_t *zf,		/* I - ZIP container file */
   }
   va_end(ap);
 
+  zf->internal_attrs = ZIPC_INTERNAL_TEXT;
+
   return (zipcFileWrite(zf, buffer, strlen(buffer)));
 }
 
@@ -322,6 +372,8 @@ int					/* O - 0 on success, -1 on error */
 zipcFilePuts(zipc_file_t *zf,		/* I - ZIP container file */
                const char  *s)		/* I - String to write */
 {
+  zf->internal_attrs = ZIPC_INTERNAL_TEXT;
+
   return (zipcFileWrite(zf, s, strlen(s)));
 }
 
@@ -517,7 +569,11 @@ zipcFileXMLPrintf(
   }
 
   if (bufptr > buffer)
+  {
+    zf->internal_attrs = ZIPC_INTERNAL_TEXT;
+
     status |= zipcFileWrite(zf, buffer, (size_t)(bufptr - buffer));
+  }
 
   return (status);
 }
@@ -690,7 +746,7 @@ zipc_write_dir_header(
 
   status |= zipc_write_u32(zc, ZIPC_DIR_HEADER);
   status |= zipc_write_u16(zc, ZIPC_MADE_BY);
-  status |= zipc_write_u16(zc, ZIPC_VERSION);
+  status |= zipc_write_u16(zc, zf->external_attrs == ZIPC_EXTERNAL_DIR ? ZIPC_DIR_VERSION : ZIPC_FILE_VERSION);
   status |= zipc_write_u16(zc, zf->flags);
   status |= zipc_write_u16(zc, zf->method);
   status |= zipc_write_u32(zc, zc->modtime);
@@ -701,8 +757,8 @@ zipc_write_dir_header(
   status |= zipc_write_u16(zc, 0); /* extra field length */
   status |= zipc_write_u16(zc, 0); /* comment length */
   status |= zipc_write_u16(zc, 0); /* disk number start */
-  status |= zipc_write_u16(zc, 0); /* internal file attributes */
-  status |= zipc_write_u32(zc, 0); /* external file attributes */
+  status |= zipc_write_u16(zc, zf->internal_attrs);
+  status |= zipc_write_u32(zc, zf->external_attrs);
   status |= zipc_write_u32(zc, (unsigned)zf->offset);
   status |= zipc_write(zc, zf->filename, filenamelen);
 
@@ -724,11 +780,11 @@ zipc_write_local_header(
   size_t	filenamelen = strlen(zf->filename);
 					/* Length of filename */
 
-  if (zf->uncompressed_size == 0)
+  if (zf->uncompressed_size == 0 && zf->external_attrs != ZIPC_EXTERNAL_DIR)
     flags |= ZIPC_FLAG_DATA;
 
   status |= zipc_write_u32(zc, ZIPC_LOCAL_HEADER);
-  status |= zipc_write_u16(zc, ZIPC_VERSION);
+  status |= zipc_write_u16(zc, zf->external_attrs == ZIPC_EXTERNAL_DIR ? ZIPC_DIR_VERSION : ZIPC_FILE_VERSION);
   status |= zipc_write_u16(zc, flags);
   status |= zipc_write_u16(zc, zf->method);
   status |= zipc_write_u32(zc, zc->modtime);

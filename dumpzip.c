@@ -46,6 +46,8 @@
  */
 
 #define LOCAL_FILE_HEADER	0x04034b50
+#define CENTRAL_FILE_HEADER	0x02014b50
+#define END_OF_CENTRAL_DIRECTORY 0x06054b50
 
 
 /*
@@ -147,6 +149,90 @@ main(int  argc,				/* I - Number of command-line arguments */
 
       if (compressed_size > 0)
         fseek(fp, compressed_size, SEEK_CUR);
+    }
+    else if (sig == CENTRAL_FILE_HEADER)
+    {
+      unsigned compressed_size;
+      unsigned filename_length;
+      unsigned extra_field_length;
+      unsigned file_comment_length;
+      unsigned datetime;
+
+      puts("Central File Header");
+      puts("-------------------");
+      printf("            version made by = %04x\n", read_u16(fp));
+      printf("  version needed to extract = %04x\n", read_u16(fp));
+      printf("   general purpose bit flag = %04x\n", read_u16(fp));
+      printf("         compression method = %d\n", read_u16(fp));
+      datetime = read_u16(fp);
+      printf("         last mod file time = %04x (%02d:%02d:%02d)\n", datetime, (datetime >> 11) & 31, (datetime >> 5) & 63, 2 * (datetime & 31));
+      datetime = read_u16(fp);
+      printf("         last mod file date = %04x (%04d-%02d-%02d)\n", datetime, ((datetime >> 9) & 127) + 1980, (datetime >> 5) & 15, datetime & 31);
+      printf("                     crc-32 = %08x\n", read_u32(fp));
+      printf("            compressed_size = %u\n", compressed_size = read_u32(fp));
+      printf("          uncompressed_size = %u\n", read_u32(fp));
+      printf("           file name length = %u\n", filename_length = read_u16(fp));
+      printf("         extra field length = %u\n", extra_field_length = read_u16(fp));
+      printf("        file comment length = %u\n", file_comment_length = read_u16(fp));
+      printf("          disk number start = %u\n", read_u16(fp));
+      printf("   internal file attributes = %04x\n", read_u16(fp));
+      printf("   external file attributes = %08x\n", read_u32(fp));
+      printf("     offset of local header = %u\n", read_u32(fp));
+
+      fread(buffer, 1, filename_length, fp);
+      buffer[filename_length] = '\0';
+      printf("                   filename = %s\n", buffer);
+
+      while (extra_field_length > 0)
+      {
+        unsigned header_id = read_u16(fp);
+        unsigned header_len = read_u16(fp);
+
+        extra_field_length -= header_len + 4;
+
+        if (header_id == 0x5455)
+        {
+	  printf("                extra field = 0x%04x (extended timestamp - %u bytes)\n", header_id, header_len);
+        }
+        else if (header_id == 0x7875)
+        {
+	  printf("                extra field = 0x%04x (???? - %u bytes)\n", header_id, header_len);
+        }
+        else
+        {
+	  printf("                extra field = 0x%04x (%u bytes)\n", header_id, header_len);
+        }
+
+        fseek(fp, header_len, SEEK_CUR);
+      }
+
+      if (file_comment_length > 0)
+      {
+	fread(buffer, 1, file_comment_length, fp);
+	buffer[file_comment_length] = '\0';
+	printf("                file comment = %s\n", buffer);
+      }
+    }
+    else if (sig == END_OF_CENTRAL_DIRECTORY)
+    {
+      unsigned file_comment_length;
+
+      puts("End of Central Directory");
+      puts("------------------------");
+      printf("        number of this disk = %u\n", read_u16(fp));
+      printf("      disk with central dir = %u\n", read_u16(fp));
+      printf(" total entries on this disk = %u\n", read_u16(fp));
+      printf("              total entries = %u\n", read_u16(fp));
+      printf("  size of central directory = %u\n", read_u32(fp));
+      printf("        offset to directory = %u\n", read_u32(fp));
+      printf("   .ZIP file comment length = %u\n", file_comment_length = read_u16(fp));
+
+      if (file_comment_length > 0)
+      {
+	fread(buffer, 1, file_comment_length, fp);
+	buffer[file_comment_length] = '\0';
+	printf("           .ZIP file comment = %s\n", buffer);
+      }
     }
     else
     {
