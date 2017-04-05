@@ -41,9 +41,13 @@ all:	testzipc
 
 clean:
 	rm -f testzipc $(OBJS)
+	rm -f dumpzip
 
 testzipc:	$(OBJS)
 	$(CC) $(CFLAGS) -o testzipc $(OBJS) $(LIBS)
 	./testzipc testzipc.dat zipc.h $(OBJS:.o=.c) $(OBJS)
 
 $(OBJS):	zipc.h
+
+dumpzip:	dumpzip.c
+	$(CC) $(CFLAGS) -o dumpzip dumpzip.c

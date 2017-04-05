@@ -570,18 +570,18 @@ zipcOpen(const char *filename,		/* I - Filename of container */
     *
     *     Bits    Description
     *     ------  -----------
-    *     0-4     Second
-    *     5-10    Minute
-    *     11-15   Hour
+    *     0-4     Seconds / 2 (0-29)
+    *     5-10    Minute (0-59)
+    *     11-15   Hour (0-23)
     *     16-20   Day (1-31)
     *     21-24   Month (1-12)
     *     25-31   Years since 1980
     */
 
     curtime = time(NULL);
-    curdate = gmtime(&curtime);
+    curdate = localtime(&curtime);
 
-    zc->modtime = (unsigned)curdate->tm_sec |
+    zc->modtime = (unsigned)(curdate->tm_sec / 2) |
                   ((unsigned)curdate->tm_min << 5) |
                   ((unsigned)curdate->tm_hour << 11) |
                   ((unsigned)curdate->tm_mday << 16) |
