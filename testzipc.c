@@ -55,6 +55,8 @@ main(int  argc,				/* I - Number of command-line arguments */
   zipc_file_t	*zf;			/* ZIP container file */
   int		i;			/* Looping var */
   FILE		*fp;			/* File to read from */
+  char		filename[256],		/* Filename for archive */
+		*ptr;			/* Pointer into filename */
   unsigned char	buffer[8192];		/* Write buffer */
   size_t	bytes;			/* Bytes read */
 
@@ -94,12 +96,24 @@ main(int  argc,				/* I - Number of command-line arguments */
     puts("zipcCreateFileWithString(testzipc.txt): OK");
 
  /*
+  * Create a directory...
+  */
+
+  if (zipcCreateDirectory(zc, "META-INF")) /* Omitting trailing slash for test */
+  {
+    printf("zipcCreateDirectory(META-INF): %s\n", zipcError(zc));
+    status = 1;
+  }
+  else
+    puts("zipcCreateDirectory(META-INF): OK");
+
+ /*
   * Create a file and write using a bunch of different functions...
   */
 
-  if ((zf = zipcCreateFile(zc, "testzipc.xml", 0)) != NULL)
+  if ((zf = zipcCreateFile(zc, "META-INF/testzipc.xml", 0)) != NULL)
   {
-    puts("zipcCreateFile(testzipc.xml): OK");
+    puts("zipcCreateFile(META-INF/testzipc.xml): OK");
 
     if (zipcFilePuts(zf, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"))
     {
@@ -121,15 +135,27 @@ main(int  argc,				/* I - Number of command-line arguments */
 
     if (zipcFileFinish(zf))
     {
-      printf("zipcFileFinish(testzipc.xml): %s\n", zipcError(zc));
+      printf("zipcFileFinish(META-INF/testzipc.xml): %s\n", zipcError(zc));
       status = 1;
     }
   }
   else
   {
-    printf("zipcCreateFile(testzipc.xml): %s\n", zipcError(zc));
+    printf("zipcCreateFile(META-INF/testzipc.xml): %s\n", zipcError(zc));
     status = 1;
   }
+
+ /*
+  * Create another directory...
+  */
+
+  if (zipcCreateDirectory(zc, "CONTENTS/"))
+  {
+    printf("zipcCreateDirectory(CONTENTS/): %s\n", zipcError(zc));
+    status = 1;
+  }
+  else
+    puts("zipcCreateDirectory(CONTENTS/): OK");
 
  /*
   * Add files from the command-line...
@@ -144,22 +170,29 @@ main(int  argc,				/* I - Number of command-line arguments */
       continue;
     }
 
-    if ((zf = zipcCreateFile(zc, argv[i], 1)) != NULL)
+    if ((ptr = strrchr(argv[i], '/')) != NULL)
+      ptr ++;
+    else
+      ptr = argv[i];
+
+    snprintf(filename, sizeof(filename), "CONTENTS/%s", ptr);
+
+    if ((zf = zipcCreateFile(zc, filename, 1)) != NULL)
     {
-      printf("zipcCreateFile(%s): OK\n", argv[i]);
+      printf("zipcCreateFile(%s): OK\n", filename);
 
       while ((bytes = fread(buffer, 1, sizeof(buffer), fp)) > 0)
       {
 	if (zipcFileWrite(zf, buffer, bytes))
 	{
-	  printf("zipcFileWrite(%s): %s\n", argv[i], zipcError(zc));
+	  printf("zipcFileWrite(%s): %s\n", filename, zipcError(zc));
 	  status = 1;
 	}
       }
 
       if (zipcFileFinish(zf))
       {
-	printf("zipcFileFinish(%s): %s\n", argv[i], zipcError(zc));
+	printf("zipcFileFinish(%s): %s\n", filename, zipcError(zc));
 	status = 1;
       }
 
@@ -167,18 +200,18 @@ main(int  argc,				/* I - Number of command-line arguments */
     }
     else
     {
-      printf("zipcCreateFile(%s): %s\n", argv[i], zipcError(zc));
+      printf("zipcCreateFile(%s): %s\n", filename, zipcError(zc));
       status = 1;
     }
   }
 
   if (zipcClose(zc))
   {
-    printf("zipcClose: %s\n", strerror(errno));
-    return (1);
+    printf("zipcClose(%s): %s\n", argv[1], strerror(errno));
+    status = 1;
   }
-
-  puts("zipcClose: OK");
+  else
+    printf("zipcClose(%s): OK\n", argv[1]);
 
   return (status);
 }
