@@ -54,11 +54,8 @@ main(int  argc,				/* I - Number of command-line arguments */
   zipc_t	*zc;			/* ZIP container */
   zipc_file_t	*zf;			/* ZIP container file */
   int		i;			/* Looping var */
-  FILE		*fp;			/* File to read from */
   char		filename[256],		/* Filename for archive */
 		*ptr;			/* Pointer into filename */
-  unsigned char	buffer[8192];		/* Write buffer */
-  size_t	bytes;			/* Bytes read */
 
 
  /*
@@ -163,13 +160,6 @@ main(int  argc,				/* I - Number of command-line arguments */
 
   for (i = 2; i < argc; i ++)
   {
-    if ((fp = fopen(argv[i], "rb")) == NULL)
-    {
-      perror(argv[i]);
-      status = 1;
-      continue;
-    }
-
     if ((ptr = strrchr(argv[i], '/')) != NULL)
       ptr ++;
     else
@@ -177,32 +167,18 @@ main(int  argc,				/* I - Number of command-line arguments */
 
     snprintf(filename, sizeof(filename), "CONTENTS/%s", ptr);
 
-    if ((zf = zipcCreateFile(zc, filename, 1)) != NULL)
-    {
-      printf("zipcCreateFile(%s): OK\n", filename);
-
-      while ((bytes = fread(buffer, 1, sizeof(buffer), fp)) > 0)
-      {
-	if (zipcFileWrite(zf, buffer, bytes))
-	{
-	  printf("zipcFileWrite(%s): %s\n", filename, zipcError(zc));
-	  status = 1;
-	}
-      }
-
-      if (zipcFileFinish(zf))
-      {
-	printf("zipcFileFinish(%s): %s\n", filename, zipcError(zc));
-	status = 1;
-      }
-
-      fclose(fp);
-    }
+    if ((ptr = strrchr(argv[i], '.')) != NULL)
+      ptr ++;
     else
+      ptr = "o";
+
+    if (zipcCopyFile(zc, filename, argv[i], strcmp(ptr, "o"), 1))
     {
-      printf("zipcCreateFile(%s): %s\n", filename, zipcError(zc));
+      printf("zipcCopyFile(%s): %s\n", filename, zipcError(zc));
       status = 1;
     }
+    else
+      printf("zipcCopyFile(%s): OK\n", filename);
   }
 
   if (zipcClose(zc))

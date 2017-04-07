@@ -54,6 +54,20 @@ using the `zipcCreateDirectory` function:
 If you forget to include a trailing slash, one will be added for you.
 
 
+## Copying Files to a ZIP Container
+
+The `zipcCopyFile` function efficiently copies a file to the ZIP container.
+
+    /* Copy text file and compress */
+    zipcCopyFile(zc, "CONTENT/filename.html", "tempfile.html", 1, 1);
+
+    /* Copy image file and don't compress */
+    zipcCopyFile(zc, "CONTENT/filename.png", "tempfile.png", 0, 0);
+
+    /* Copy binary data file and compress */
+    zipcCopyFile(zc, "CONTENT/filename.dat", "tempfile.dat", 0, 1);
+
+
 ## Closing the ZIP Container
 
 Once you have added all of the files you need to the container, close it with
