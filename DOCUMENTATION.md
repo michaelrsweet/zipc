@@ -188,6 +188,8 @@ the same syntax as the `printf` function.
     int
     zipcFilePuts(zipc_file_t *zf, const char *s);
 
+The `zipcFilePuts` function writes a literal string to a ZIP container file
+that was created using the `zipcCreateFile` function.
 
 
 ## zipcFileWrite - Write Bytes to a ZIP Container File
@@ -195,6 +197,8 @@ the same syntax as the `printf` function.
     int
     zipcFileWrite(zipc_file_t *zf, const void *data, size_t bytes);
 
+The `zipcFileWrite` function writes a buffer of data bytes to a ZIP container
+file that was created using the `zipcCreateFile` function.
 
 
 ## zipcFileXMLPrintf - Write a Formatted XML String to a ZIP Container File
