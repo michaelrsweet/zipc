@@ -95,7 +95,7 @@ The `zipc_t` object tracks a ZIP container that was opened with the `zipcOpen`
 function.
 
 
-## zipc_file_t - ZIP Container File
+## zipc\_file\_t - ZIP Container File
 
     typedef struct _zipc_file_s zipc_file_t;
 
