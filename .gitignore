@@ -1,5 +1,6 @@
 *.dSYM
 *.o
+APPNOTE.txt
 dumpzip
 testzipc
 testzipc.dat
