@@ -2,7 +2,7 @@
 
 This is a simple ZIP container "library" consisting of a C source file and
 accompanying header file.  The ZIP format is documented in the PKWARE
-APPNOTE.TXT - .ZIP File Format Specification (http://www.pkware.com/appnote).
+[APPNOTE.TXT - .ZIP File Format Specification](http://www.pkware.com/appnote).
 
 Currently I have only implemented writing of files smaller than 4GB with or
 without deflate compression.  There is no support for signatures, encryption,
