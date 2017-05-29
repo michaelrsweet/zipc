@@ -34,6 +34,7 @@
  * Include necessary headers...
  */
 
+#  include <stdlib.h>
 #  include <sys/types.h>
 
 
