@@ -1,6 +1,35 @@
 # How to Use the zipc "Library"
 
-## Creating a ZIP Container
+## Opening a ZIP Container for Reading
+
+The `zipcOpen` function opens a ZIP container:
+
+    zipc_t *zc = zipcOpen("filename.epub", "r");
+
+
+## Reading Files from a ZIP Container
+
+> Note: You can only read one file from a ZIP container at a time.
+
+The `zipcOpenFile` function opens a file within the ZIP container:
+
+    zipc_file_t *zf = zipcOpenFile(zc, "META-INF/container.xml");
+
+The `zc` argument is the container and "META-INF/container.xml" specifies the
+filename within the container.
+
+Once opened, the `zipcFileRead` function can be used to read from the file in the container:
+
+    char buffer[1024];
+    ssize_t bytes = zipcFileRead(zf, buffer, sizeof(buffer));
+
+When all data has been read, call the `zipcFileFinish` function to "close"
+it:
+
+    zipcFileFinish(zf);
+
+
+## Creating a ZIP Container for Writing
 
 The `zipcOpen` function creates a ZIP container:
 
@@ -198,6 +227,16 @@ that was created using the `zipcCreateFile` function.  `0` is returned on
 success or `-1` on error.
 
 
+## zipcFileRead
+
+    ssize_t
+    zipcFileRead(zipc_file_t *zf, void *data, size_t bytes);
+
+The `zipcFileRead` function reads a buffer of data from a ZIP container file
+that was opened using the `zipcOpenFile` function.  The actual number of bytes
+read is returned on success or `-1` on error.
+
+
 ## zipcFileWrite
 
     int
@@ -226,7 +265,19 @@ returned on success or `-1` on error.
     zipcOpen(const char *filename, const char *mode);
 
 The `zipcOpen` function opens a new ZIP container file.  The `mode` argument
-specifies how the container is opened and currently must be the string "w" to
-indicate that the ZIP container file is opened for writing, replacing any
-existing file of the given name.  `NULL` is returned if the file cannot be
-created.
+specifies how the container is opened:
+
+- "r" indicates that the ZIP container file is opened for reading.
+- "w" indicates that the ZIP container file is opened for writing, replacing any
+existing file of the given name.
+
+`NULL` is returned if the file cannot be opened or created.
+
+
+## zipcOpenFile
+
+    zipc_file_t *
+    zipcOpenFile(zipc_t *zc, const char *filename);
+
+The `zipcOpenFile` function opens a file in the ZIP container.  `NULL` is
+returned if the file cannot be found.

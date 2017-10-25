@@ -4,10 +4,10 @@ This is a simple ZIP container "library" consisting of a C source file and
 accompanying header file.  The ZIP format is documented in the PKWARE
 [APPNOTE.TXT - .ZIP File Format Specification](http://www.pkware.com/appnote).
 
-Currently I have only implemented writing of files smaller than 4GB with or
-without deflate compression.  There is no support for signatures, encryption,
-password protection, etc. as those features of ZIP are typically not used for
-ZIP container-based formats.
+Currently I have only implemented reading and writing of files smaller than 4GB
+with or without deflate compression.  There is no support for signatures,
+encryption, password protection, etc. as those features of ZIP are typically not
+used for ZIP container-based formats.
 
 I'm providing this as open source under the "new" 2-clause BSD license which
 allows you do pretty much do whatever you like with it.  Please do provide
@@ -27,6 +27,11 @@ You'll need ZLIB and a C compiler.
 
 Add the `zipc.c` and `zipc.h` files to your project.  Include the `zipc.h`
 header in any file that needs to write ZIP containers.
+
+If you only use the ZIP reading functionality, define the `ZIPC_ONLY_READ`
+preprocessor macro.  If you only use the ZIP writing functionality, define the
+`ZIPC_ONLY_WRITE` preprocessor macro.  Both will reduce the size of the code
+that is included with your project.
 
 
 ## "Kicking the Tires"
@@ -48,6 +53,7 @@ The unzip command should produce output that looks similar to this:
            0  Stored        0   0% 04-05-2017 08:22 00000000  META-INF/
          139  Stored      139   0% 04-05-2017 08:22 ae7d2a18  META-INF/testzipc.xml
            0  Stored        0   0% 04-05-2017 08:22 00000000  CONTENTS/
+        1024  Defl:X      512  50% 04-05-2017 08:22 0f066577  CONTENTS/data.bin
         2649  Defl:X     1139  57% 04-05-2017 08:22 0f066577  CONTENTS/zipc.h
         5422  Defl:X     1955  64% 04-05-2017 08:22 8c8d34e8  CONTENTS/testzipc.c
        23480  Defl:X     5720  76% 04-05-2017 08:22 9eb6a0e7  CONTENTS/zipc.c
@@ -60,6 +66,7 @@ The unzip command should produce output that looks similar to this:
 ## Changes In V1.2
 
 - Added C++ header wrapper.
+- Added ZIP read support, including `zipcOpenFile` and `zipcFileRead` functions.
 - Fixed builds using Visual C++.
 
 
