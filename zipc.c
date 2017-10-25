@@ -876,6 +876,7 @@ zipcOpen(const char *filename,		/* I - Filename of container */
     */
 
     zipc_file_t *zf;                    /* Current file */
+    long        offset;                 /* Current offset */
     unsigned    signature,              /* Header signature */
                 version,                /* Version needed to extract */
                 flags,                  /* General purpose flags */
@@ -889,6 +890,7 @@ zipcOpen(const char *filename,		/* I - Filename of container */
                 internal_attrs,         /* Internal attributes */
                 external_attrs;         /* External attributes */
     char        cfile[256];             /* Container filename from header */
+    int         done = 0;               /* Done reading? */
 
 
    /*
@@ -905,19 +907,82 @@ zipcOpen(const char *filename,		/* I - Filename of container */
     * Read all of the file headers...
     */
 
-#if 0
-  status |= zipc_write_u32(zc, ZIPC_LOCAL_HEADER);
-  status |= zipc_write_u16(zc, zf->external_attrs == ZIPC_EXTERNAL_DIR ? ZIPC_DIR_VERSION : ZIPC_FILE_VERSION);
-  status |= zipc_write_u16(zc, zf->flags & ZIPC_FLAG_MASK);
-  status |= zipc_write_u16(zc, zf->method);
-  status |= zipc_write_u32(zc, zc->modtime);
-  status |= zipc_write_u32(zc, zf->uncompressed_size == 0 ? 0 : zf->crc32);
-  status |= zipc_write_u32(zc, (unsigned)zf->compressed_size);
-  status |= zipc_write_u32(zc, (unsigned)zf->uncompressed_size);
-  status |= zipc_write_u16(zc, (unsigned)filenamelen);
-  status |= zipc_write_u16(zc, 0); /* extra field length */
-  status |= zipc_write(zc, zf->filename, filenamelen);
-#endif /* 0 */
+    while (!done && (signature = zipc_read_u32(zc)) != 0xffffffff)
+    {
+      switch (signature)
+      {
+        case ZIPC_LOCAL_HEADER :
+            offset            = ftell(zc->fp) - 4;
+            version           = zipc_read_u16(zc);
+            flags             = zipc_read_u16(zc);
+            method            = zipc_read_u16(zc);
+            modtime           = zipc_read_u32(zc);
+            crc32             = zipc_read_u32(zc);
+            compressed_size   = zipc_read_u32(zc);
+            uncompressed_size = zipc_read_u32(zc);
+            cfile_len         = zipc_read_u16(zc);
+            extra_field_len   = zipc_read_u16(zc);
+
+            if (cfile_len > (sizeof(cfile) - 1))
+            {
+              zc->error = "Filename too long.";
+              done = 1;
+              break;
+            }
+
+            if (zipc_read(zc, cfile, cfile_len) < cfile_len)
+            {
+              done = 1;
+              break;
+            }
+
+            cfile[cfile_len] = '\0';
+
+            if (extra_field_len > 0)
+              fseek(zc->fp, extra_field_len, SEEK_CUR);
+
+            if (zc->num_files >= zc->alloc_files)
+            {
+              zc->alloc_files += 10;
+
+              if (!zc->files)
+                zf = malloc(zc->alloc_files * sizeof(zipc_file_t));
+              else
+                zf = realloc(zc->files, zc->alloc_files * sizeof(zipc_file_t));
+
+              if (!zf)
+              {
+                zc->error = strerror(errno);
+                return (NULL);
+              }
+
+              zc->files = zf;
+            }
+
+            zf = zc->files + zc->num_files;
+            zc->num_files ++;
+
+            memset(zf, 0, sizeof(zipc_file_t));
+
+            strncpy(zf->filename, cfile, sizeof(zf->filename) - 1);
+            zf->flags             = flags;
+            zf->method            = method;
+            zf->crc32             = crc32;
+            zf->compressed_size   = compressed_size;
+            zf->uncompressed_size = uncompressed_size;
+            zf->offset            = (size_t)offset;
+            zf->local_size        = (size_t)(ftell(zc->fp) - offset);
+            break;
+
+       default :
+           zc->error = "Unknown signature.";
+
+       case ZIPC_DIR_HEADER :
+       case ZIPC_END_RECORD :
+           done = 1;
+           break;
+      }
+    }
   }
 #endif /* !ZIPC_ONLY_WRITE */
 
