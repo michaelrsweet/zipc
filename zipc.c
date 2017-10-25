@@ -3,6 +3,10 @@
  *
  *     https://github.com/michaelrsweet/zipc
  *
+ * Define ZIPC_ONLY_READ to compile with just the ZIP reading code, or
+ * ZIPC_ONLY_WRITE to compile with just the ZIP writing code.  Otherwise both
+ * ZIP reader and writer code is built.
+ *
  * Copyright 2017 by Michael R Sweet.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -73,13 +77,14 @@
 struct _zipc_s
 {
   FILE		*fp;			/* ZIP file */
+  char          mode;                   /* Open mode - 'r' or 'w' */
   const char	*error;			/* Last error message */
   size_t	alloc_files,		/* Allocated file entries in ZIP */
 		num_files;		/* Number of file entries in ZIP */
   zipc_file_t	*files;			/* File entries in ZIP */
   z_stream	stream;			/* Deflate stream for current file */
   unsigned int	modtime;		/* MS-DOS modification date/time */
-  char		buffer[16384];		/* Deflate output buffer */
+  char		buffer[16384];		/* Deflate buffer */
 };
 
 struct _zipc_file_s
@@ -94,6 +99,9 @@ struct _zipc_file_s
   size_t	offset;			/* Offset of this entry in file */
   unsigned short internal_attrs;	/* Internal attributes */
   unsigned int	external_attrs;		/* External attributes */
+  size_t        local_size;             /* Size of local header */
+  size_t        compressed_pos;         /* Current read position in stream */
+  size_t        uncompressed_pos;       /* Current read position in file */
 };
 
 
@@ -101,51 +109,65 @@ struct _zipc_file_s
  * Local functions...
  */
 
-static zipc_file_t	*zipc_add_file(zipc_t *zc, const char *filename, int compression);
+#ifndef ZIPC_ONLY_WRITE
+static ssize_t		zipc_read(zipc_t *zc, void *buffer, size_t bytes);
+static unsigned		zipc_read_u16(zipc_t *zc);
+static unsigned		zipc_read_u32(zipc_t *zc);
 static int		zipc_write(zipc_t *zc, const void *buffer, size_t bytes);
+#endif /* !ZIPC_ONLY_WRITE */
+#ifndef ZIPC_ONLY_READ
+static zipc_file_t	*zipc_add_file(zipc_t *zc, const char *filename, int compression);
 static int		zipc_write_dir_header(zipc_t *zc, zipc_file_t *zf);
 static int		zipc_write_local_header(zipc_t *zc, zipc_file_t *zf);
 static int		zipc_write_local_trailer(zipc_t *zc, zipc_file_t *zf);
 static int		zipc_write_u16(zipc_t *zc, unsigned value);
 static int		zipc_write_u32(zipc_t *zc, unsigned value);
+#endif /* !ZIPC_ONLY_READ */
 
 
 /*
- * 'zipcClose()' - Close a ZIP container, writing out the central directory.
+ * 'zipcClose()' - Close a ZIP container, writing out the central directory as
+ *                 needed.
  */
 
 int					/* O - 0 on success, -1 on error */
 zipcClose(zipc_t *zc)			/* I - ZIP container */
 {
-  size_t	i;			/* Looping var */
-  zipc_file_t	*zf;			/* Current file */
-  long		start, end;		/* Central directory offsets */
-  int		status = 0;		/* Return status */
+  int	status = 0;		        /* Return status */
 
 
- /*
-  * First write the central directory headers...
-  */
+#ifndef ZIPC_ONLY_READ
+  if (zc->mode == 'w')
+  {
+    size_t	i;			/* Looping var */
+    zipc_file_t	*zf;			/* Current file */
+    long	start, end;		/* Central directory offsets */
 
-  start = ftell(zc->fp);
+   /*
+    * First write the central directory headers...
+    */
 
-  for (i = zc->num_files, zf = zc->files; i > 0; i --, zf ++)
-    status |= zipc_write_dir_header(zc, zf);
+    start = ftell(zc->fp);
 
-  end = ftell(zc->fp);
+    for (i = zc->num_files, zf = zc->files; i > 0; i --, zf ++)
+      status |= zipc_write_dir_header(zc, zf);
 
- /*
-  * Then write the end of central directory block...
-  */
+    end = ftell(zc->fp);
 
-  status |= zipc_write_u32(zc, ZIPC_END_RECORD);
-  status |= zipc_write_u16(zc, 0); /* Disk number */
-  status |= zipc_write_u16(zc, 0); /* Disk number containing directory */
-  status |= zipc_write_u16(zc, (unsigned)zc->num_files);
-  status |= zipc_write_u16(zc, (unsigned)zc->num_files);
-  status |= zipc_write_u32(zc, (unsigned)(end - start));
-  status |= zipc_write_u32(zc, (unsigned)start);
-  status |= zipc_write_u16(zc, 0); /* file comment length */
+   /*
+    * Then write the end of central directory block...
+    */
+
+    status |= zipc_write_u32(zc, ZIPC_END_RECORD);
+    status |= zipc_write_u16(zc, 0); /* Disk number */
+    status |= zipc_write_u16(zc, 0); /* Disk number containing directory */
+    status |= zipc_write_u16(zc, (unsigned)zc->num_files);
+    status |= zipc_write_u16(zc, (unsigned)zc->num_files);
+    status |= zipc_write_u32(zc, (unsigned)(end - start));
+    status |= zipc_write_u32(zc, (unsigned)start);
+    status |= zipc_write_u16(zc, 0); /* file comment length */
+  }
+#endif /* !ZIPC_ONLY_READ */
 
   if (fclose(zc->fp))
     status = -1;
@@ -159,6 +181,7 @@ zipcClose(zipc_t *zc)			/* I - ZIP container */
 }
 
 
+#ifndef ZIPC_ONLY_READ
 /*
  * 'zipcCopyFile()' - Copy a file into a ZIP container.
  *
@@ -181,6 +204,12 @@ zipcCopyFile(zipc_t *zc,                /* I - ZIP container */
   char          buffer[65536];          /* Copy buffer */
   size_t        length;                 /* Number of bytes read */
 
+
+  if (zc->mode != 'w')
+  {
+    zc->error = "Not opened for writing.";
+    return (-1);
+  }
 
   if ((srcfile = fopen(srcname, text ? "r" : "rb")) == NULL)
   {
@@ -245,12 +274,17 @@ zipcCreateDirectory(
     zipc_t     *zc,			/* I - ZIP container */
     const char *filename)		/* I - Directory name */
 {
-  zipc_file_t	*zf = zipc_add_file(zc, filename, 0);
-					/* ZIP container file */
+  zipc_file_t	*zf;    		/* ZIP container file */
   int		status = 0;		/* Return status */
 
 
-  if (zf)
+  if (zc->mode != 'w')
+  {
+    zc->error = "Not opened for writing.";
+    return (-1);
+  }
+
+  if ((zf = zipc_add_file(zc, filename, 0)) != NULL)
   {
     char *end = zf->filename + strlen(zf->filename);
 
@@ -285,13 +319,20 @@ zipcCreateFile(
     const char *filename,		/* I - Filename in container */
     int        compressed)		/* I - 0 for uncompressed, 1 for compressed */
 {
+  zipc_file_t	*zf;    		/* ZIP container file */
+
+
+  if (zc->mode != 'w')
+  {
+    zc->error = "Not opened for writing.";
+    return (NULL);
+  }
+
  /*
   * Add the file and write the header...
   */
 
-  zipc_file_t	*zf = zipc_add_file(zc, filename, compressed);
-					/* ZIP container file */
-
+  zf = zipc_add_file(zc, filename, compressed);
   zf->flags |= ZIPC_FLAG_STREAMED;
   zf->external_attrs = ZIPC_EXTERNAL_FILE;
 
@@ -317,18 +358,23 @@ zipcCreateFileWithString(
     const char *filename,		/* I - Filename in container */
     const char *contents)		/* I - Contents of file */
 {
-  zipc_file_t	*zf = zipc_add_file(zc, filename, 0);
-					/* ZIP container file */
+  zipc_file_t	*zf;			/* ZIP container file */
   size_t	len = strlen(contents);	/* Length of contents */
   int		status = 0;		/* Return status */
 
 
-  if (zf)
+  if (zc->mode != 'w')
+  {
+    zc->error = "Not opened for writing.";
+    return (-1);
+  }
+
+  if ((zf = zipc_add_file(zc, filename, 0)) != NULL)
   {
     zf->uncompressed_size = len;
     zf->compressed_size   = len;
     zf->crc32             = crc32(zf->crc32, (const Bytef *)contents, (unsigned)len);
-    zf->internal_attrs       = ZIPC_INTERNAL_TEXT;
+    zf->internal_attrs    = ZIPC_INTERNAL_TEXT;
     zf->external_attrs    = ZIPC_EXTERNAL_FILE;
 
     status |= zipc_write_local_header(zc, zf);
@@ -339,6 +385,7 @@ zipcCreateFileWithString(
 
   return (status);
 }
+#endif /* !ZIPC_ONLY_READ */
 
 
 /*
@@ -363,45 +410,59 @@ zipcFileFinish(zipc_file_t *zf)		/* I - ZIP container file */
   zipc_t	*zc = zf->zc;		/* ZIP container */
 
 
-  if (zf->method != ZIPC_COMP_STORE)
+#ifndef ZIPC_ONLY_READ
+  if (zc->mode == 'w')
   {
-    int zstatus;			/* Deflate status */
-
-    while ((zstatus = deflate(&zc->stream, Z_FINISH)) != Z_STREAM_END)
+    if (zf->method != ZIPC_COMP_STORE)
     {
-      if (zstatus < Z_OK && zstatus != Z_BUF_ERROR)
+      int zstatus;			/* Deflate status */
+
+      while ((zstatus = deflate(&zc->stream, Z_FINISH)) != Z_STREAM_END)
       {
-        zc->error = "Deflate failed.";
-        status = -1;
-        break;
+        if (zstatus < Z_OK && zstatus != Z_BUF_ERROR)
+        {
+          zc->error = "Deflate failed.";
+          status = -1;
+          break;
+        }
+
+        status |= zipc_write(zf->zc, zc->buffer, (size_t)((char *)zc->stream.next_out - zc->buffer));
+        zf->compressed_size += (size_t)((char *)zc->stream.next_out - zc->buffer);
+
+        zc->stream.next_out  = (Bytef *)zc->buffer;
+        zc->stream.avail_out = sizeof(zc->buffer);
       }
 
-      status |= zipc_write(zf->zc, zc->buffer, (size_t)((char *)zc->stream.next_out - zc->buffer));
-      zf->compressed_size += (size_t)((char *)zc->stream.next_out - zc->buffer);
+      if ((char *)zc->stream.next_out > zc->buffer)
+      {
+        status |= zipc_write(zf->zc, zc->buffer, (size_t)((char *)zc->stream.next_out - zc->buffer));
+        zf->compressed_size += (size_t)((char *)zc->stream.next_out - zc->buffer);
+      }
 
-      zc->stream.next_out  = (Bytef *)zc->buffer;
-      zc->stream.avail_out = sizeof(zc->buffer);
+      deflateEnd(&zc->stream);
     }
 
-    if ((char *)zc->stream.next_out > zc->buffer)
-    {
-      status |= zipc_write(zf->zc, zc->buffer, (size_t)((char *)zc->stream.next_out - zc->buffer));
-      zf->compressed_size += (size_t)((char *)zc->stream.next_out - zc->buffer);
-    }
-
-    deflateEnd(&zc->stream);
+    status |= zipc_write_local_trailer(zc, zf);
   }
+#endif /* !ZIPC_ONLY_READ */
 
-  status |= zipc_write_local_trailer(zc, zf);
+#ifndef ZIPC_ONLY_WRITE
+#  ifndef ZIPC_ONLY_READ
+  else
+#  endif /* !ZIPC_ONLY_READ */
+  if (zc->mode == 'r' && zf->method != ZIPC_COMP_STORE)
+    inflateEnd(&zc->stream);
+#endif /* !ZIPC_ONLY_WRITE */
 
   return (status);
 }
 
 
+#ifndef ZIPC_ONLY_READ
 /*
  * 'zipcFilePrintf()' - Write a formatted string to a file.
  *
- * The "zf" value is the one returned by the @link zipc_start_file@ function
+ * The "zf" value is the one returned by the @link zipcCreateFile@ function
  * used to create the ZIP container file.
  *
  * The "format" value is a standard printf format string and is followed by
@@ -416,6 +477,12 @@ zipcFilePrintf(zipc_file_t *zf,		/* I - ZIP container file */
   char		buffer[8192];		/* Format buffer */
   va_list	ap;			/* Pointer to additional arguments */
 
+
+  if (zf->zc->mode != 'w')
+  {
+    zf->zc->error = "Not opened for writing.";
+    return (-1);
+  }
 
   va_start(ap, format);
   if (vsnprintf(buffer, sizeof(buffer), format, ap) < 0)
@@ -435,7 +502,7 @@ zipcFilePrintf(zipc_file_t *zf,		/* I - ZIP container file */
 /*
  * 'zipcFilePuts()' - Write a string to a file.
  *
- * The "zf" value is the one returned by the @link zipc_start_file@ function
+ * The "zf" value is the one returned by the @link zipcCreateFile@ function
  * used to create the ZIP container file.
  *
  * The "s" value is literal string that is written to the file.  No newline is
@@ -446,16 +513,112 @@ int					/* O - 0 on success, -1 on error */
 zipcFilePuts(zipc_file_t *zf,		/* I - ZIP container file */
                const char  *s)		/* I - String to write */
 {
+  if (zf->zc->mode != 'w')
+  {
+    zf->zc->error = "Not opened for writing.";
+    return (-1);
+  }
+
   zf->internal_attrs = ZIPC_INTERNAL_TEXT;
 
   return (zipcFileWrite(zf, s, strlen(s)));
 }
+#endif /* !ZIPC_ONLY_READ */
 
 
+#ifndef ZIPC_ONLY_WRITE
+/*
+ * 'zipcFileRead()' - Read data from a ZIP container file.
+ *
+ * The "zf" value is the one returned by the @link zipcOpenFile@ function used
+ * to open the ZIP container file.
+ *
+ * The "data" value points to a buffer to hold the bytes that are read.
+ */
+
+ssize_t                                 /* O - Number of bytes read or -1 on error */
+zipcFileRead(zipc_file_t *zf,           /* I - ZIP container file */
+             void        *data,         /* I - Read buffer */
+             size_t      bytes)         /* I - Maximum number of bytes to read */
+{
+  ssize_t       rbytes;                 /* Bytes read */
+  zipc_t        *zc = zf->zc;           /* ZIP container */
+
+
+  if (zc->mode != 'r')
+  {
+    zc->error = "Not opened for reading.";
+    return (-1);
+  }
+
+  if ((zf->uncompressed_pos + bytes) > zf->uncompressed_size)
+    bytes = zf->uncompressed_size - zf->uncompressed_pos;
+
+  if (zf->method == ZIPC_COMP_STORE)
+  {
+   /*
+    * Read literal data...
+    */
+
+    rbytes = zipc_read(zc, data, bytes);
+  }
+  else
+  {
+   /*
+    * Read deflated (compressed) data...
+    */
+
+    int	zstatus;			/* Deflate status */
+
+    zc->stream.next_out  = (Bytef *)data;
+    zc->stream.avail_out = (unsigned)bytes;
+
+    do
+    {
+      if (zc->stream.avail_in == 0)
+      {
+        size_t  cbytes = zf->compressed_size - zf->compressed_pos;
+                                        /* Compressed bytes left */
+
+        if (cbytes > sizeof(zc->buffer))
+          cbytes = sizeof(zc->buffer);
+
+        if ((rbytes = zipc_read(zc, zc->buffer, cbytes)) < 0)
+        {
+          zc->error = strerror(errno);
+          return (-1);
+        }
+
+        zc->stream.next_in  = (Bytef *)zc->buffer;
+        zc->stream.avail_in = (unsigned)rbytes;
+      }
+
+      zstatus = inflate(&zc->stream, Z_NO_FLUSH);
+
+      if (zstatus < Z_OK && zstatus != Z_BUF_ERROR)
+      {
+        zc->error = "Inflate failed.";
+        return (-1);
+      }
+    }
+    while (zc->stream.avail_out > 0 && zf->compressed_pos < zf->compressed_size);
+
+    rbytes = bytes - zc->stream.avail_out;
+  }
+
+  if (rbytes > 0)
+    zf->uncompressed_pos += rbytes;
+
+  return (rbytes);
+}
+#endif /* !ZIPC_ONLY_WRITE */
+
+
+#ifndef ZIPC_ONLY_READ
 /*
  * 'zipcFileWrite()' - Write data to a ZIP container file.
  *
- * The "zf" value is the one returned by the @link zipc_file_start@ function
+ * The "zf" value is the one returned by the @link zipcCreateFile@ function
  * used to create the ZIP container file.
  *
  * The "data" value points to the bytes to be written.
@@ -471,6 +634,12 @@ zipcFileWrite(zipc_file_t *zf,		/* I - ZIP container file */
   int		status = 0;		/* Return status */
   zipc_t	*zc = zf->zc;		/* ZIP container */
 
+
+  if (zc->mode != 'w')
+  {
+    zc->error = "Not opened for writing.";
+    return (-1);
+  }
 
   zf->uncompressed_size += bytes;
   zf->crc32             = crc32(zf->crc32, (const Bytef *)data, (unsigned)bytes);
@@ -524,7 +693,7 @@ zipcFileWrite(zipc_file_t *zf,		/* I - ZIP container file */
 /*
  * 'zipcFileXMLPrintf()' - Write a formatted XML string to a file.
  *
- * The "zf" value is the one returned by the @link zipc_start_file@ function
+ * The "zf" value is the one returned by the @link zipcCreateFile@ function
  * used to create the ZIP container file.
  *
  * The "format" value is a printf-style format string supporting "%d", "%s",
@@ -547,6 +716,12 @@ zipcFileXMLPrintf(
   const char	*s;			/* String pointer */
   int		d;			/* Number */
 
+
+  if (zf->zc->mode != 'w')
+  {
+    zf->zc->error = "Not opened for writing.";
+    return (-1);
+  }
 
   va_start(ap, format);
 
@@ -651,12 +826,14 @@ zipcFileXMLPrintf(
 
   return (status);
 }
+#endif /* !ZIPC_ONLY_READ */
 
 
 /*
  * 'zipcOpen()' - Open a ZIP container.
  *
- * Currently the only supported "mode" value is "w" (write).
+ * Currently the only supported "mode" values are "r" to read a ZIP container
+ * and "w" to write a ZIP container.
  */
 
 zipc_t *				/* O - ZIP container */
@@ -667,10 +844,16 @@ zipcOpen(const char *filename,		/* I - Filename of container */
 
 
  /*
-  * Only support write mode for now...
+  * Only support read and write mode for now...
   */
 
+#ifdef ZIPC_ONLY_READ
+  if (strcmp(mode, "r"))
+#elif defined(ZIPC_ONLY_WRITE)
   if (strcmp(mode, "w"))
+#else
+  if (strcmp(mode, "r") && strcmp(mode, "w"))
+#endif /* ZIPC_ONLY_READ */
   {
     errno = EINVAL;
     return (NULL);
@@ -680,8 +863,74 @@ zipcOpen(const char *filename,		/* I - Filename of container */
   * Allocate memory...
   */
 
-  if ((zc = calloc(1, sizeof(zipc_t))) != NULL)
+  if ((zc = calloc(1, sizeof(zipc_t))) == NULL)
+    return (NULL);
+
+  zc->mode = *mode;
+
+#ifndef ZIPC_ONLY_WRITE
+  if (zc->mode == 'r')
   {
+   /*
+    * Open for reading...
+    */
+
+    zipc_file_t *zf;                    /* Current file */
+    unsigned    signature,              /* Header signature */
+                version,                /* Version needed to extract */
+                flags,                  /* General purpose flags */
+                method,                 /* Compression method */
+                modtime,                /* Last modification date/time */
+                crc32,                  /* CRC-32 of file data */
+                compressed_size,        /* Compressed file size */
+                uncompressed_size,      /* Uncompressed file size */
+                cfile_len,              /* Length of container filename */
+                extra_field_len,        /* Length of extra data */
+                internal_attrs,         /* Internal attributes */
+                external_attrs;         /* External attributes */
+    char        cfile[256];             /* Container filename from header */
+
+
+   /*
+    * Open the container file...
+    */
+
+    if ((zc->fp = fopen(filename, "rb")) == NULL)
+    {
+      free(zc);
+      return (NULL);
+    }
+
+   /*
+    * Read all of the file headers...
+    */
+
+#if 0
+  status |= zipc_write_u32(zc, ZIPC_LOCAL_HEADER);
+  status |= zipc_write_u16(zc, zf->external_attrs == ZIPC_EXTERNAL_DIR ? ZIPC_DIR_VERSION : ZIPC_FILE_VERSION);
+  status |= zipc_write_u16(zc, zf->flags & ZIPC_FLAG_MASK);
+  status |= zipc_write_u16(zc, zf->method);
+  status |= zipc_write_u32(zc, zc->modtime);
+  status |= zipc_write_u32(zc, zf->uncompressed_size == 0 ? 0 : zf->crc32);
+  status |= zipc_write_u32(zc, (unsigned)zf->compressed_size);
+  status |= zipc_write_u32(zc, (unsigned)zf->uncompressed_size);
+  status |= zipc_write_u16(zc, (unsigned)filenamelen);
+  status |= zipc_write_u16(zc, 0); /* extra field length */
+  status |= zipc_write(zc, zf->filename, filenamelen);
+#endif /* 0 */
+  }
+#endif /* !ZIPC_ONLY_WRITE */
+
+#ifndef ZIPC_ONLY_READ
+#  ifndef ZIPC_ONLY_WRITE
+  else
+#  endif /* !ZIPC_ONLY_WRITE */
+  if (zc->mode == 'w')
+  {
+   /*
+    * Open for writing...
+    */
+
     time_t	curtime;		/* Current timestamp */
     struct tm	*curdate;		/* Current date/time */
 
@@ -718,11 +967,62 @@ zipcOpen(const char *filename,		/* I - Filename of container */
                   ((unsigned)(curdate->tm_mon + 1) << 21) |
                   ((unsigned)(curdate->tm_year - 80) << 25);
   }
+#endif /* !ZIPC_ONLY_READ */
 
   return (zc);
 }
 
 
+#ifndef ZIPC_ONLY_WRITE
+/*
+ * 'zipcOpenFile()' - Open a file in a ZIP container.
+ */
+
+zipc_file_t *                           /* O - File */
+zipcOpenFile(zipc_t     *zc,            /* I - ZIP container */
+             const char *filename)      /* I - Name of file */
+{
+  size_t        count;                  /* Number of files */
+  zipc_file_t   *current;               /* Current file */
+
+
+  for (count = zc->num_files, current = zc->files; count > 0; count --, current ++)
+  {
+    if (!strcmp(filename, current->filename))
+    {
+      fseek(zc->fp, current->offset + current->local_size, SEEK_SET);
+
+      if (current->method == ZIPC_COMP_DEFLATE)
+      {
+        zc->stream.zalloc = (alloc_func)0;
+        zc->stream.zfree  = (free_func)0;
+        zc->stream.opaque = (voidpf)0;
+
+        inflateInit(&zc->stream);
+
+        zc->stream.next_in  = (Bytef *)zc->buffer;
+        zc->stream.avail_in = 0;
+      }
+
+      current->compressed_pos   = 0;
+      current->uncompressed_pos = 0;
+
+      return (current);
+    }
+  }
+
+ /*
+  * If we get here we didn't find the file...
+  */
+
+  zc->error = strerror(ENOENT);
+
+  return (NULL);
+}
+#endif /* !ZIPC_ONLY_WRITE */
+
+
+#ifndef ZIPC_ONLY_READ
 /*
  * 'zipc_add_file()' - Add a file to the ZIP container.
  */
@@ -785,8 +1085,67 @@ zipc_add_file(zipc_t     *zc,		/* I - ZIP container */
 
   return (temp);
 }
+#endif /* !ZIPC_ONLY_READ */
 
 
+#ifndef ZIPC_ONLY_WRITE
+/*
+ * 'zipc_read()' - Read from the ZIP container and capture any error.
+ */
+
+static ssize_t                          /* O - Bytes read or -1 on error */
+zipc_read(zipc_t *zc,                   /* I - ZIP container */
+          void   *buffer,               /* I - Read buffer */
+          size_t bytes)                 /* I - Maximum bytes to read */
+{
+  ssize_t       rbytes;                 /* Bytes read */
+
+
+  if ((rbytes = (ssize_t)fread(buffer, 1, bytes, zc->fp)) > 0)
+    return (rbytes);
+
+  zc->error = strerror(ferror(zc->fp));
+
+  return (-1);
+}
+
+
+/*
+ * 'zipc_read_u16()' - Read a 16-bit unsigned integer from the ZIP container.
+ */
+
+static unsigned                         /* O - Integer or 0xffff on error */
+zipc_read_u16(zipc_t *zc)               /* I - ZIP container */
+{
+  unsigned char	buffer[2];		/* Buffer */
+
+
+  if (zipc_read(zc, buffer, sizeof(buffer)) != sizeof(buffer))
+    return (0xffff);
+
+  return ((buffer[1] << 8) | buffer[0]);
+}
+
+
+/*
+ * 'zipc_read_u32()' - Read a 32-bit unsigned integer from the ZIP container.
+ */
+
+static unsigned                         /* O - Integer or 0xffffffff on error */
+zipc_read_u32(zipc_t *zc)               /* I - ZIP container */
+{
+  unsigned char	buffer[4];		/* Buffer */
+
+
+  if (zipc_read(zc, buffer, sizeof(buffer)) != sizeof(buffer))
+    return (0xffff);
+
+  return ((buffer[3] << 24) | (buffer[2] << 16) | (buffer[1] << 8) | buffer[0]);
+}
+#endif /* !ZIPC_ONLY_WRITE */
+
+
+#ifndef ZIPC_ONLY_READ
 /*
  * 'zipc_write()' - Write bytes to a ZIP container.
  */
@@ -938,3 +1297,4 @@ zipc_write_u32(zipc_t   *zc,		/* I - ZIP container */
 
   return (zipc_write(zc, buffer, sizeof(buffer)));
 }
+#endif /* !ZIPC_ONLY_READ */

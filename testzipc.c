@@ -55,7 +55,10 @@ main(int  argc,				/* I - Number of command-line arguments */
   zipc_file_t	*zf;			/* ZIP container file */
   int		i;			/* Looping var */
   char		filename[256],		/* Filename for archive */
-		*ptr;			/* Pointer into filename */
+		*ptr,			/* Pointer into filename */
+                data_bin[1024],         /* Random data for data.bin */
+                buffer[1024];           /* Read back buffer */
+  ssize_t       bytes;                  /* Bytes read */
 
 
  /*
@@ -74,11 +77,11 @@ main(int  argc,				/* I - Number of command-line arguments */
 
   if ((zc = zipcOpen(argv[1], "w")) == NULL)
   {
-    printf("zipcOpen(%s): %s\n", argv[1], strerror(errno));
+    printf("zipcOpen(\"%s\", \"w\"): %s\n", argv[1], strerror(errno));
     return (1);
   }
 
-  printf("zipcOpen(%s): OK\n", argv[1]);
+  printf("zipcOpen(\"%s\", \"w\"): OK\n", argv[1]);
 
  /*
   * Add a file using a constant string...
@@ -86,11 +89,11 @@ main(int  argc,				/* I - Number of command-line arguments */
 
   if (zipcCreateFileWithString(zc, "testzipc.txt", "application/testzipc"))
   {
-    printf("zipcCreateFileWithString(testzipc.txt): %s\n", zipcError(zc));
+    printf("zipcCreateFileWithString(\"testzipc.txt\"): %s\n", zipcError(zc));
     status = 1;
   }
   else
-    puts("zipcCreateFileWithString(testzipc.txt): OK");
+    puts("zipcCreateFileWithString(\"testzipc.txt\"): OK");
 
  /*
   * Create a directory...
@@ -98,11 +101,11 @@ main(int  argc,				/* I - Number of command-line arguments */
 
   if (zipcCreateDirectory(zc, "META-INF")) /* Omitting trailing slash for test */
   {
-    printf("zipcCreateDirectory(META-INF): %s\n", zipcError(zc));
+    printf("zipcCreateDirectory(\"META-INF\"): %s\n", zipcError(zc));
     status = 1;
   }
   else
-    puts("zipcCreateDirectory(META-INF): OK");
+    puts("zipcCreateDirectory(\"META-INF\"): OK");
 
  /*
   * Create a file and write using a bunch of different functions...
@@ -110,7 +113,7 @@ main(int  argc,				/* I - Number of command-line arguments */
 
   if ((zf = zipcCreateFile(zc, "META-INF/testzipc.xml", 0)) != NULL)
   {
-    puts("zipcCreateFile(META-INF/testzipc.xml): OK");
+    puts("zipcCreateFile(\"META-INF/testzipc.xml\", 0): OK");
 
     if (zipcFilePuts(zf, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"))
     {
@@ -132,13 +135,13 @@ main(int  argc,				/* I - Number of command-line arguments */
 
     if (zipcFileFinish(zf))
     {
-      printf("zipcFileFinish(META-INF/testzipc.xml): %s\n", zipcError(zc));
+      printf("zipcFileFinish(\"META-INF/testzipc.xml\"): %s\n", zipcError(zc));
       status = 1;
     }
   }
   else
   {
-    printf("zipcCreateFile(META-INF/testzipc.xml): %s\n", zipcError(zc));
+    printf("zipcCreateFile(\"META-INF/testzipc.xml\", 0): %s\n", zipcError(zc));
     status = 1;
   }
 
@@ -153,6 +156,35 @@ main(int  argc,				/* I - Number of command-line arguments */
   }
   else
     puts("zipcCreateDirectory(CONTENTS/): OK");
+
+ /*
+  * Create a random data file...
+  */
+
+  for (i = 0; i < sizeof(data_bin); i ++)
+    data_bin[i] = random();
+
+  if ((zf = zipcCreateFile(zc, "CONTENTS/data.bin", 1)) != NULL)
+  {
+    puts("zipcCreateFile(\"CONTENTS/data.bin\", 1): OK");
+
+    if (zipcFileWrite(zf, data_bin, sizeof(data_bin)))
+    {
+      printf("zipcFileWrite: %s\n", zipcError(zc));
+      status = 1;
+    }
+
+    if (zipcFileFinish(zf))
+    {
+      printf("zipcFileFinish(\"CONTENTS/data.bin\"): %s\n", zipcError(zc));
+      status = 1;
+    }
+  }
+  else
+  {
+    printf("zipcCreateFile(\"CONTENTS/data.bin\", 1): %s\n", zipcError(zc));
+    status = 1;
+  }
 
  /*
   * Add files from the command-line...
@@ -174,20 +206,108 @@ main(int  argc,				/* I - Number of command-line arguments */
 
     if (zipcCopyFile(zc, filename, argv[i], strcmp(ptr, "o"), 1))
     {
-      printf("zipcCopyFile(%s): %s\n", filename, zipcError(zc));
+      printf("zipcCopyFile(\"%s\", \"%s\"): %s\n", filename, argv[i], zipcError(zc));
       status = 1;
     }
     else
-      printf("zipcCopyFile(%s): OK\n", filename);
+      printf("zipcCopyFile(\"%s\", \"%s\"): OK\n", filename, argv[i]);
   }
 
   if (zipcClose(zc))
   {
-    printf("zipcClose(%s): %s\n", argv[1], strerror(errno));
+    printf("zipcClose(\"%s\"): %s\n", argv[1], strerror(errno));
     status = 1;
   }
   else
-    printf("zipcClose(%s): OK\n", argv[1]);
+    printf("zipcClose(\"%s\"): OK\n", argv[1]);
+
+ /*
+  * Read tests...
+  */
+
+  if ((zc = zipcOpen(argv[1], "r")) == NULL)
+  {
+    printf("zipcOpen(\"%s\", \"r\"): %s\n", argv[1], strerror(errno));
+    return (1);
+  }
+
+  printf("zipcOpen(\"%s\", \"r\"): OK\n", argv[1]);
+
+  if ((zf = zipcOpenFile(zc, "testzipc.txt")) != NULL)
+  {
+    puts("zipcOpenFile(\"testzipc.txt\"): OK");
+    if ((bytes = zipcFileRead(zf, buffer, sizeof(buffer))) > 0)
+    {
+      buffer[bytes] = '\0';
+
+      if (!strcmp(buffer, "application/testzipc"))
+      {
+        puts("zipcFileRead: OK");
+      }
+      else
+      {
+        printf("zipcFileRead: Bad (%s)\n", buffer);
+        status = 1;
+      }
+    }
+    else
+    {
+      printf("zipcFileRead: %s\n", zipcError(zc));
+      status = 1;
+    }
+
+    if (zipcFileFinish(zf))
+    {
+      printf("zipcFileFinish(\"testzipc.txt\"): %s\n", zipcError(zc));
+      status = 1;
+    }
+  }
+  else
+  {
+    printf("zipcOpenFile(\"testzipc.txt\"): %s\n", zipcError(zc));
+    status = 1;
+  }
+
+  if ((zf = zipcOpenFile(zc, "CONTENTS/data.bin")) != NULL)
+  {
+    puts("zipcOpenFile(\"CONTENTS/data.bin\"): OK");
+    if ((bytes = zipcFileRead(zf, buffer, sizeof(buffer))) > 0)
+    {
+      if (bytes == sizeof(buffer) && !memcmp(buffer, data_bin, sizeof(buffer)))
+      {
+        puts("zipcFileRead: OK");
+      }
+      else
+      {
+        puts("zipcFileRead: Bad (binary data doesn't match)");
+        status = 1;
+      }
+    }
+    else
+    {
+      printf("zipcFileRead: %s\n", zipcError(zc));
+      status = 1;
+    }
+
+    if (zipcFileFinish(zf))
+    {
+      printf("zipcFileFinish(\"CONTENTS/data.bin\"): %s\n", zipcError(zc));
+      status = 1;
+    }
+  }
+  else
+  {
+    printf("zipcOpenFile(\"CONTENTS/data.bin\"): %s\n", zipcError(zc));
+    status = 1;
+  }
+
+  if (zipcClose(zc))
+  {
+    printf("zipcClose(\"%s\"): %s\n", argv[1], strerror(errno));
+    status = 1;
+  }
+  else
+    printf("zipcClose(\"%s\"): OK\n", argv[1]);
 
   return (status);
 }

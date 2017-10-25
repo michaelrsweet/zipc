@@ -67,6 +67,7 @@ __attribute__ ((__format__ (__printf__, 2, 3)))
 #  endif /* __GNUC__ */
 ;
 extern int		zipcFilePuts(zipc_file_t *zf, const char *s);
+extern ssize_t		zipcFileRead(zipc_file_t *zf, void *data, size_t bytes);
 extern int		zipcFileWrite(zipc_file_t *zf, const void *data, size_t bytes);
 extern int		zipcFileXMLPrintf(zipc_file_t *zf, const char *format, ...)
 #  ifdef __GNUC__
@@ -74,6 +75,7 @@ __attribute__ ((__format__ (__printf__, 2, 3)))
 #  endif /* __GNUC__ */
 ;
 extern zipc_t		*zipcOpen(const char *filename, const char *mode);
+extern zipc_file_t      *zipcOpenFile(zipc_t *zc, const char *filename);
 
 #  ifdef __cplusplus
 }
