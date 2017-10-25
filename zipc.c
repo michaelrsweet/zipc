@@ -79,6 +79,7 @@ struct _zipc_s
   FILE		*fp;			/* ZIP file */
   char          mode;                   /* Open mode - 'r' or 'w' */
   const char	*error;			/* Last error message */
+  char          error_msg[256];         /* Formatted error message */
   size_t	alloc_files,		/* Allocated file entries in ZIP */
 		num_files;		/* Number of file entries in ZIP */
   zipc_file_t	*files;			/* File entries in ZIP */
@@ -123,6 +124,7 @@ static int		zipc_write_local_trailer(zipc_t *zc, zipc_file_t *zf);
 static int		zipc_write_u16(zipc_t *zc, unsigned value);
 static int		zipc_write_u32(zipc_t *zc, unsigned value);
 #endif /* !ZIPC_ONLY_READ */
+static const char       *zlib_status_string(int zstatus);
 
 
 /*
@@ -421,7 +423,7 @@ zipcFileFinish(zipc_file_t *zf)		/* I - ZIP container file */
       {
         if (zstatus < Z_OK && zstatus != Z_BUF_ERROR)
         {
-          zc->error = "Deflate failed.";
+          zc->error = zlib_status_string(zstatus);
           status = -1;
           break;
         }
@@ -597,7 +599,7 @@ zipcFileRead(zipc_file_t *zf,           /* I - ZIP container file */
 
       if (zstatus < Z_OK && zstatus != Z_BUF_ERROR)
       {
-        zc->error = "Inflate failed.";
+        zc->error = zlib_status_string(zstatus);
         return (-1);
       }
     }
@@ -679,7 +681,7 @@ zipcFileWrite(zipc_file_t *zf,		/* I - ZIP container file */
 
       if (zstatus < Z_OK && zstatus != Z_BUF_ERROR)
       {
-        zc->error = "Deflate failed.";
+        zc->error = zlib_status_string(zstatus);
         status = -1;
         break;
       }
@@ -965,6 +967,7 @@ zipcOpen(const char *filename,		/* I - Filename of container */
             memset(zf, 0, sizeof(zipc_file_t));
 
             strncpy(zf->filename, cfile, sizeof(zf->filename) - 1);
+            zf->zc                = zc;
             zf->flags             = flags;
             zf->method            = method;
             zf->crc32             = crc32;
@@ -972,10 +975,15 @@ zipcOpen(const char *filename,		/* I - Filename of container */
             zf->uncompressed_size = uncompressed_size;
             zf->offset            = (size_t)offset;
             zf->local_size        = (size_t)(ftell(zc->fp) - offset);
+
+            fseek(zc->fp, compressed_size, SEEK_CUR);
             break;
 
        default :
-           zc->error = "Unknown signature.";
+           snprintf(zc->error_msg, sizeof(zc->error_msg), "Unknown ZIP signature 0x%08x.", signature);
+           zc->error = zc->error_msg;
+
+           fprintf(stderr, "zipcOpen: %s\n", zc->error_msg);
 
        case ZIPC_DIR_HEADER :
        case ZIPC_END_RECORD :
@@ -1063,7 +1071,7 @@ zipcOpenFile(zipc_t     *zc,            /* I - ZIP container */
         zc->stream.zfree  = (free_func)0;
         zc->stream.opaque = (voidpf)0;
 
-        inflateInit(&zc->stream);
+        inflateInit2(&zc->stream, -15);
 
         zc->stream.next_in  = (Bytef *)zc->buffer;
         zc->stream.avail_in = 0;
@@ -1363,3 +1371,45 @@ zipc_write_u32(zipc_t   *zc,		/* I - ZIP container */
   return (zipc_write(zc, buffer, sizeof(buffer)));
 }
 #endif /* !ZIPC_ONLY_READ */
+
+
+/*
+ * 'zlib_status_string()' - Return a string corresponding to the given ZLIB status.
+ */
+
+static const char *                     /* O - Error string */
+zlib_status_string(int zstatus)         /* I - Status */
+{
+  switch (zstatus)
+  {
+    case Z_ERRNO :
+        return (strerror(errno));
+
+    case Z_OK :
+        return ("OK");
+
+    case Z_STREAM_END :
+        return ("End of stream.");
+
+    case Z_NEED_DICT :
+        return ("Need dictionary.");
+
+    case Z_STREAM_ERROR :
+        return ("Error in stream.");
+
+    case Z_DATA_ERROR :
+        return ("Error in data");
+
+    case Z_MEM_ERROR :
+        return ("Unable to allocate memory.");
+
+    case Z_BUF_ERROR :
+        return ("Unable to fill buffer.");
+
+    case Z_VERSION_ERROR :
+        return ("Version mismatch.");
+
+    default :
+        return ("Unknown status");
+  }
+}
