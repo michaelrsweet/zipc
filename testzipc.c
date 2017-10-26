@@ -133,6 +133,18 @@ main(int  argc,				/* I - Number of command-line arguments */
       status = 1;
     }
 
+    if (zipcFileXMLPrintf(zf, "<string>%s</string>\n", "\"testzipc\" <string> value & test string."))
+    {
+      printf("zipcFileXMLPrintf: %s\n", zipcError(zc));
+      status = 1;
+    }
+
+    if (zipcFileXMLPrintf(zf, "<search url=\"%s\" />\n", "https://www.google.com/search?safe=off&q=zip+container+format"))
+    {
+      printf("zipcFileXMLPrintf: %s\n", zipcError(zc));
+      status = 1;
+    }
+
     if (zipcFileFinish(zf))
     {
       printf("zipcFileFinish(\"META-INF/testzipc.xml\"): %s\n", zipcError(zc));
@@ -265,6 +277,83 @@ main(int  argc,				/* I - Number of command-line arguments */
   else
   {
     printf("zipcOpenFile(\"testzipc.txt\"): %s\n", zipcError(zc));
+    status = 1;
+  }
+
+  if ((zf = zipcOpenFile(zc, "META-INF/testzipc.xml")) != NULL)
+  {
+    static const char * const strings[] =
+    {
+      "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+      "\n",
+      "<integer>",
+      "42",
+      "</integer>",
+      "\n",
+      "<string>",
+      "\"testzipc\" <string> value & test string.",
+      "</string>",
+      "\n"
+    };
+
+    puts("zipcOpenFile(\"META-INF/testzipc.xml\"): OK");
+
+    for (i = 0; i < (int)(sizeof(strings) / sizeof(strings[0])); i ++)
+    {
+      if (zipcFileXMLGets(zf, buffer, sizeof(buffer)) || strcmp(buffer, strings[i]))
+      {
+        printf("zipcFileXMLGets #%d: Bad (%s)\n", i + 1, buffer);
+        status = 1;
+      }
+      else
+        printf("zipcFileXMLGets #%d: OK\n", i + 1);
+    }
+
+    if (zipcFileGets(zf, buffer, sizeof(buffer)) || strcmp(buffer, "<string>&quot;testzipc&quot; &lt;string&gt; value &amp; test string.</string>"))
+    {
+      printf("zipcFileGets: Bad (%s)\n", buffer);
+      status = 1;
+    }
+    else
+      puts("zipcFileGets: OK");
+
+    if (zipcFileXMLGets(zf, buffer, sizeof(buffer)) || strcmp(buffer, "<search url=\"https://www.google.com/search?safe=off&amp;q=zip+container+format\" />"))
+    {
+      printf("zipcFileXMLGets: Bad (%s)\n", buffer);
+      status = 1;
+    }
+    else
+    {
+      char value[1024];                 /* Attribute value */
+
+      puts("zipcFileXMLGets: OK");
+
+      if (zipcXMLGetAttribute(buffer, "bogus", value, sizeof(value)))
+      {
+        printf("zipcXMLGetAttribute(\"bogus\"): Bad (%s)\n", value);
+        status = 1;
+      }
+      else
+        puts("zipcXMLGetAttribute(\"bogus\"): OK");
+
+      if (!zipcXMLGetAttribute(buffer, "url", value, sizeof(value)) || strcmp(value, "https://www.google.com/search?safe=off&q=zip+container+format"))
+      {
+        printf("zipcXMLGetAttribute(\"url\"): Bad (%s)\n", value);
+        status = 1;
+      }
+      else
+        puts("zipcXMLGetAttribute(\"url\"): OK");
+    }
+
+    if (zipcFileFinish(zf))
+    {
+      printf("zipcFileFinish(\"META-INF/testzipc.xml\"): %s\n", zipcError(zc));
+      status = 1;
+    }
+  }
+  else
+  {
+    printf("zipcOpenFile(\"META-INF/testzipc.xml\"): %s\n", zipcError(zc));
     status = 1;
   }
 
