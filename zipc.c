@@ -812,9 +812,9 @@ zipcFileXMLGets(zipc_file_t *zf,        /* I - ZIP container file */
  * The "zf" value is the one returned by the @link zipcCreateFile@ function
  * used to create the ZIP container file.
  *
- * The "format" value is a printf-style format string supporting "%d", "%s",
- * and "%%" and is followed by any arguments needed by the string.  Strings
- * ("%s") are escaped as needed.
+ * The "format" value is a printf-style format string supporting "%d", "%f",
+ * "%s", and "%%" and is followed by any arguments needed by the string.
+ * Strings ("%s") are escaped as needed.
  */
 
 int					/* O - 0 on success, -1 on error */
@@ -830,7 +830,8 @@ zipcFileXMLPrintf(
 					/* End of buffer less "&quot;" */
 		*bufptr = buffer;	/* Pointer into buffer */
   const char	*s;			/* String pointer */
-  int		d;			/* Number */
+  int		d;			/* Integer */
+  double        f;                      /* Real/floating point number */
 
 
   if (zf->zc->mode != 'w')
@@ -860,6 +861,14 @@ zipcFileXMLPrintf(
 
             d = va_arg(ap, int);
             snprintf(bufptr, bufend - bufptr, "%d", d);
+            bufptr += strlen(bufptr);
+            break;
+
+        case 'f' : /* Substitute a single real number */
+            format ++;
+
+            f = va_arg(ap, double);
+            snprintf(bufptr, bufend - bufptr, "%f", f);
             bufptr += strlen(bufptr);
             break;
 
@@ -917,7 +926,7 @@ zipcFileXMLPrintf(
         default : /* Something else we don't support... */
             format += strlen(format);
             status = -1;
-            zf->zc->error = "Unsupported format character - only %%, %d, and %s are supported.";
+            zf->zc->error = "Unsupported format character - only %%, %d, %f, and %s are supported.";
             break;
       }
     }

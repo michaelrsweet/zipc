@@ -305,8 +305,8 @@ from XML element fragments.
 
 The `zipcFileXMLPrintf` function writes a formatted XML string to a ZIP
 container file that was created using the `zipcCreateFile` function.  The format
-string supports the "%%", "%d", and "%s" `printf` directives, where the "%s"
-(string) directive handles escaping of special XML/HTML characters.  `0` is
+string supports the "%%", "%d", "%f", and "%s" `printf` directives, where the
+"%s" (string) directive handles escaping of special XML/HTML characters.  `0` is
 returned on success or `-1` on error.
 
 
