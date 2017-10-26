@@ -66,7 +66,8 @@ The unzip command should produce output that looks similar to this:
 ## Changes In V1.2
 
 - Added C++ header wrapper.
-- Added ZIP read support, including `zipcOpenFile` and `zipcFileRead` functions.
+- Added ZIP read support using the `zipcOpenFile`, `zipcFileGets`,
+  `zipcFileRead`, `zipcFileXMLGets`, and `zipcXMLGetAttribute` functions.
 - Fixed builds using Visual C++.
 
 

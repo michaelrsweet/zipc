@@ -18,10 +18,24 @@ The `zipcOpenFile` function opens a file within the ZIP container:
 The `zc` argument is the container and "META-INF/container.xml" specifies the
 filename within the container.
 
-Once opened, the `zipcFileRead` function can be used to read from the file in the container:
+Once opened, the `zipcFileRead` function can be used to read arbitrary bytes
+from the file in the container:
 
     char buffer[1024];
     ssize_t bytes = zipcFileRead(zf, buffer, sizeof(buffer));
+
+Lines of text can be read using the `zipcFileGets` function:
+
+    char line[1024];
+    while (zipcFileGets(zf, line, sizeof(line)) == 0)
+      puts(line);
+
+XML elements and text fragments can be read using the `zipcFileXMLGets`
+function:
+
+    char xml[1024];
+    while (zipcFileXMLGets(zf, xml, sizeof(xml)) == 0)
+      puts(xml);
 
 When all data has been read, call the `zipcFileFinish` function to "close"
 it:
@@ -206,6 +220,18 @@ using the `zipcCreateFile` function.  `0` is returned on success or `-1` on
 error.
 
 
+## zipcFileGets
+
+    int
+    zipcFileGets(zipc_file_t *zf, char *line, size_t linesize);
+
+The `zipcFileGets` function reads a line of text from a ZIP container file that
+was opened using the `zipcOpenFile` function.  The line may be terminated by a
+carriage return and line feed (Windows-style) or just a line feed (everybody
+else).  The line ending is not copied to the line buffer.  `0` is returned on
+success or `-1` on error.
+
+
 ## zipcFilePrintf
 
     int
@@ -247,6 +273,31 @@ file that was created using the `zipcCreateFile` function.  `0` is returned on
 success or `-1` on error.
 
 
+## zipcFileXMLGets
+
+    int
+    zipcFileXMLGets(zipc_file_t *zf, char *fragment, size_t fragsize);
+
+The `zipcFileXMLGets` function reads an XML fragment from a ZIP container file
+that was opened using the `zipcOpenFile` function.  The text or element from the
+XML file is stored in the buffer pointed to by `fragment` whose size is
+`fragsize`.  Text fragments have XML escaping removed.  `0` is returned on
+success or `-1` on error.
+
+For example, the following XML:
+
+    <element url="https://example.com?a=1&amp;b=2">foo &amp; bar</element>
+
+is returned as the following sequence of fragment strings:
+
+    <element url="https://example.com?a=1&amp;b=2">
+    foo & bar
+    </element>
+
+The `zipcXMLGetAttribute` function can be used to retrieve the attribute values
+from XML element fragments.
+
+
 ## zipcFileXMLPrintf
 
     int
@@ -281,3 +332,23 @@ existing file of the given name.
 
 The `zipcOpenFile` function opens a file in the ZIP container.  `NULL` is
 returned if the file cannot be found.
+
+
+## zipcXMLGetAttribute
+
+    const char *
+    zipcXMLGetAttribute(const char *element, const char *attrname,
+                        char *buffer, size_t bufsize);
+
+The `zipcXMLGetAttribute` function retrieves the attribute value from an XML
+element fragment read using the `zipcFileXMLGets` function.  The value is copied
+to the buffer with escaping removed.  `NULL` is returned if the named attribute
+is not present in the element.
+
+For example, the "url" attribute value returned from the element string:
+
+    <element url="https://example.com?a=1&amp;b=2">
+
+will be:
+
+    https://example.com?a=1&b=2
