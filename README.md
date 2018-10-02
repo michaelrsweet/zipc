@@ -63,12 +63,12 @@ The unzip command should produce output that looks similar to this:
        64562            22788  65%                            9 files
 
 
-## Changes In V1.3
+## Changes in vCURRENT
 
 - Fixed some issues when building using Visual Studio.
 
 
-## Changes In V1.2
+## Changes in v1.2
 
 - Added C++ header wrapper.
 - Added ZIP read support using the `zipcOpenFile`, `zipcFileGets`,
@@ -77,7 +77,7 @@ The unzip command should produce output that looks similar to this:
 - Fixed builds using Visual C++.
 
 
-## Changes In V1.1
+## Changes in v1.1
 
 The following changes were made for v1.1:
 
@@ -88,7 +88,7 @@ The following changes were made for v1.1:
 
 ## Legal Stuff
 
-Copyright 2017 by Michael R Sweet.
+Copyright 2017-2018 by Michael R Sweet.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
