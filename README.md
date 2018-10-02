@@ -63,6 +63,11 @@ The unzip command should produce output that looks similar to this:
        64562            22788  65%                            9 files
 
 
+## Changes In V1.3
+
+- Fixed some issues when building using Visual Studio.
+
+
 ## Changes In V1.2
 
 - Added C++ header wrapper.
