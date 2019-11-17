@@ -66,6 +66,7 @@ The unzip command should produce output that looks similar to this:
 ## Changes in vCURRENT
 
 - Fixed some issues when building using Visual Studio.
+- Switched to using `localtime_r/s` to avoid potential thread safety issues.
 
 
 ## Changes in v1.2
