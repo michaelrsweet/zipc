@@ -15,6 +15,7 @@ before_install:
 
 script: make clean && make
 
+# Git sucks
 addons:
   coverity_scan:
     project:
