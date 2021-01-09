@@ -97,7 +97,7 @@ The following changes were made for v1.1:
 
 ## Legal Stuff
 
-Copyright 2017-2021 by Michael R Sweet.
+Copyright © 2017-2021 by Michael R Sweet.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
