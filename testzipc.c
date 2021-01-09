@@ -7,7 +7,7 @@
  *
  *     ./testzipc filename.zip [files to add]
  *
- * Copyright 2017 by Michael R Sweet.
+ * Copyright © 2017-2021 by Michael R Sweet.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -248,7 +248,7 @@ main(int  argc,				/* I - Number of command-line arguments */
   if ((zf = zipcOpenFile(zc, "testzipc.txt")) != NULL)
   {
     puts("zipcOpenFile(\"testzipc.txt\"): OK");
-    if ((bytes = zipcFileRead(zf, buffer, sizeof(buffer))) > 0)
+    if ((bytes = zipcFileRead(zf, buffer, sizeof(buffer) - 1)) > 0)
     {
       buffer[bytes] = '\0';
 
