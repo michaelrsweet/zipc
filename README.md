@@ -1,5 +1,12 @@
 # zipc
 
+![Version](https://img.shields.io/github/v/release/michaelrsweet/zipc?include_prereleases)
+![BSD 2-Clause](https://img.shields.io/github/license/michaelrsweet/zipc)
+[![Build Status](https://travis-ci.com/michaelrsweet/zipc.svg?branch=master)](https://travis-ci.com/github/michaelrsweet/zipc)
+[![Coverity Scan Status](https://img.shields.io/coverity/scan/22416.svg)](https://scan.coverity.com/projects/michaelrsweet-zipc)
+[![LGTM Grade](https://img.shields.io/lgtm/grade/cpp/github/michaelrsweet/zipc)](https://lgtm.com/projects/g/michaelrsweet/zipc/context:cpp)
+[![LGTM Alerts](https://img.shields.io/lgtm/alerts/github/michaelrsweet/zipc)](https://lgtm.com/projects/g/michaelrsweet/zipc/)
+
 This is a simple ZIP container "library" consisting of a C source file and
 accompanying header file.  The ZIP format is documented in the PKWARE
 [APPNOTE.TXT - .ZIP File Format Specification](http://www.pkware.com/appnote).
