@@ -4,26 +4,23 @@
 
 language: c
 
-env:
-  global:
-   # The next declaration is the encrypted COVERITY_SCAN_TOKEN, created
-   #   via the "travis encrypt" command using the project repo's public key
-   - secure: "C/k+x9KV8iPJe21TeTorEd7nk6KNQW9P+4N34PwG/xzzKXpHIfV7c/9uD9CNczXLBp4PvAIHlzbr+K1tWGB8HVrb3tDIVrzXipGF63UgzTUsFO7rphUtWrkgz03y6XJn17pDI78DBSAG8fHWKzh8RDBFUeDYLEyxHyJVMCEPuNpFNbGwbPhRwrlble+C0CfvRkq29hDHg6p1iWp1SH2KvQ3vnSUasQhdXqlEcOVZhyTzhuPB7fb9aR1AHbefysSkvTTCmDqZD3fPZcsZokR/gnN6etAyspBfFyEe/CQKiNF4ivs4VTxWfl0arorbZQDUzm/iokfQ0RBmHt51tvd8N9q2zA68urV8iK4cgFktEdFNestpGJMGpxb7y3gjYg2v/cIuqhCerRsGm48ZioSaHsAYGq7tsOOgQoYfUAnpwW/0qAnvSqtD1k6js56eq59cnFEIU/2pfKF+dKxclaAByjPnu2fFknQLD4iNNFbgYRg1wNSQeMUTDSCszkLSkN8c6YoDWNkQ7UydpZkdlEt4LZfRRj++M06BHgD7dDFYi6VGCUPKc9BJ7/7mPlwdILO6+ERO2wLsuexeVSGDEp3jcUmPPPLqJjmSR6G+5MKl8PPghnUsyuQnMe6FT2N9Acqr2sT8wOtuFAH96LNsFzAlSMIrQAu9cLkhFr8mb66wRWU="
+jobs:
+  include:
+    # Linux-specific build stuff
+    - os: linux
+      dist: focal
+      virt: vm
+      env:
+        - ASAN_OPTIONS=leak_check_at_exit=false
+      script: make sanitizer && make test && make cppcheck
+      addons:
+        apt:
+          packages: [cppcheck]
 
-before_install:
-  - echo -n | openssl s_client -connect https://scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
-
-script: make
-
-addons:
-  coverity_scan:
-    project:
-      name: "michaelrsweet/zipc"
-      description: "ZIP Container 'Library'"
-    notification_email: michael.r.sweet@gmail.com
-    build_command_prepend: "make clean"
-    build_command: "make"
-    branch_pattern: coverity_scan
+    # macOS-specific build stuff
+    - os: osx
+      osx_image: xcode12.2
+      script: make sanitizer && make test && make clang
 
 notifications:
   email:
