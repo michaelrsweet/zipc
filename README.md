@@ -67,6 +67,7 @@ The unzip command should produce output that looks similar to this:
 
 - Fixed some issues when building using Visual Studio.
 - Switched to using `localtime_r/s` to avoid potential thread safety issues.
+- Fixed some issues reported by Coverity.
 
 
 ## Changes in v1.2
@@ -89,7 +90,7 @@ The following changes were made for v1.1:
 
 ## Legal Stuff
 
-Copyright 2017-2018 by Michael R Sweet.
+Copyright 2017-2021 by Michael R Sweet.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
