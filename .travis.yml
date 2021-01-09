@@ -13,31 +13,20 @@ env:
 before_install:
   - echo -n | openssl s_client -connect https://scan.coverity.com:443 | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | sudo tee -a /etc/ssl/certs/ca-
 
-jobs:
-  include:
-    # Linux-specific build stuff
-    - os: linux
-      dist: focal
-      virt: vm
-      env:
-        - ASAN_OPTIONS=leak_check_at_exit=false
-      script: make sanitizer && make test && make cppcheck
-      addons:
-        apt:
-          packages: [cppcheck]
-        coverity_scan:
-          project:
-            name: "michaelrsweet/zipc"
-            description: "ZIP Container 'Library'"
-          notification_email: michael.r.sweet@gmail.com
-          build_command_prepend: "make clean"
-          build_command: "make"
-          branch_pattern: coverity_scan
-
-    # macOS-specific build stuff
-    - os: osx
-      osx_image: xcode12.2
-      script: make sanitizer && make test && make clang
+os: linux
+dist: focal
+virt: vm
+addons:
+  apt:
+    packages: [cppcheck]
+  coverity_scan:
+    project:
+      name: "michaelrsweet/zipc"
+      description: "ZIP Container 'Library'"
+    notification_email: michael.r.sweet@gmail.com
+    build_command_prepend: "make clean"
+    build_command: "make"
+    branch_pattern: coverity_scan
 
 notifications:
   email:
