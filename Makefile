@@ -3,7 +3,7 @@
 #
 #     https://github.com/michaelrsweet/zipc
 #
-# Copyright 2017 by Michael R Sweet.
+# Copyright 2017-2021 by Michael R Sweet.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are met:
@@ -43,11 +43,28 @@ clean:
 	rm -f testzipc $(OBJS)
 	rm -f dumpzip
 
+sanitizer:
+	$(MAKE) clean
+	$(MAKE) CFLAGS="-g -Wall -fsanitize=address" all
+
 testzipc:	$(OBJS)
 	$(CC) $(CFLAGS) -o testzipc $(OBJS) $(LIBS)
+
+test:	testzipc
 	./testzipc testzipc.dat zipc.h $(OBJS:.o=.c) $(OBJS)
 
 $(OBJS):	zipc.h
 
 dumpzip:	dumpzip.c
 	$(CC) $(CFLAGS) -o dumpzip dumpzip.c
+
+# Scan code with the Clang static analyzer <https://clang-analyzer.llvm.org>
+clang:
+	clang $(CFLAGS) -Werror --analyze $(OBJS:.o=.c)
+	rm -rf $(OBJS:.o=.plist)
+
+
+# Scan code with Cppcheck <http://cppcheck.sourceforge.net>
+cppcheck:
+	cppcheck --template=gcc --addon=cert.py --suppress=cert-MSC24-C --suppress=cert-EXP05-C --suppress=cert-API01-C $(OBJS:.o=.c) 2>cppcheck.log
+	@test -s cppcheck.log && (echo ""; echo "Errors detected:"; echo ""; cat cppcheck.log; exit 1) || exit 0
