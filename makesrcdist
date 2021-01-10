@@ -14,7 +14,7 @@ echo Creating tag for release...
 git tag -m "Tag $version" v$version
 git push origin v$version
 
-echo Creating mmd-$version.tar.gz...
-git archive --format tar --prefix=mmd-$version/ HEAD | gzip -v9 >mmd-$version.tar.gz
-gpg --detach-sign mmd-$version.tar.gz
+echo Creating zipc-$version.tar.gz...
+git archive --format tar --prefix=zipc-$version/ HEAD | gzip -v9 >zipc-$version.tar.gz
+gpg --detach-sign zipc-$version.tar.gz
 
