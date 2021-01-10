@@ -70,7 +70,7 @@ The unzip command should produce output that looks similar to this:
        64562            22788  65%                            9 files
 
 
-## Changes in vCURRENT
+## Changes in v1.3
 
 - Fixed some issues when building using Visual Studio.
 - Switched to using `localtime_r/s` to avoid potential thread safety issues.
