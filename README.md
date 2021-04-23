@@ -1,8 +1,8 @@
-# zipc
+zipc - ZIP Container "Library"
+==============================
 
 ![Version](https://img.shields.io/github/v/release/michaelrsweet/zipc?include_prereleases)
 ![BSD 2-Clause](https://img.shields.io/github/license/michaelrsweet/zipc)
-[![Build Status](https://travis-ci.com/michaelrsweet/zipc.svg?branch=master)](https://travis-ci.com/github/michaelrsweet/zipc)
 [![Coverity Scan Status](https://img.shields.io/coverity/scan/22416.svg)](https://scan.coverity.com/projects/michaelrsweet-zipc)
 [![LGTM Grade](https://img.shields.io/lgtm/grade/cpp/github/michaelrsweet/zipc)](https://lgtm.com/projects/g/michaelrsweet/zipc/context:cpp)
 [![LGTM Alerts](https://img.shields.io/lgtm/alerts/github/michaelrsweet/zipc)](https://lgtm.com/projects/g/michaelrsweet/zipc/)
@@ -25,12 +25,14 @@ feedback and report bugs to the Github project page at:
 so that everyone can benefit.
 
 
-## Requirements
+Requirements
+------------
 
 You'll need ZLIB and a C compiler.
 
 
-## How to Incorporate With Your Project
+How to Incorporate With Your Project
+------------------------------------
 
 Add the `zipc.c` and `zipc.h` files to your project.  Include the `zipc.h`
 header in any file that needs to write ZIP containers.
@@ -41,7 +43,8 @@ preprocessor macro.  If you only use the ZIP writing functionality, define the
 that is included with your project.
 
 
-## "Kicking the Tires"
+"Kicking the Tires"
+-------------------
 
 The supplied makefile allows you to build the unit tests on Linux and macOS (at
 least), which verify that all of the functions work as expected to produce a
@@ -70,14 +73,22 @@ The unzip command should produce output that looks similar to this:
        64562            22788  65%                            9 files
 
 
-## Changes in v1.3
+Changes in v1.4
+---------------
+
+- Fixed some new Coverity-reported error handling issues with the ZLIB functions
+
+
+Changes in v1.3
+---------------
 
 - Fixed some issues when building using Visual Studio.
 - Switched to using `localtime_r/s` to avoid potential thread safety issues.
 - Fixed some issues reported by Coverity.
 
 
-## Changes in v1.2
+Changes in v1.2
+---------------
 
 - Added C++ header wrapper.
 - Added ZIP read support using the `zipcOpenFile`, `zipcFileGets`,
@@ -86,7 +97,8 @@ The unzip command should produce output that looks similar to this:
 - Fixed builds using Visual C++.
 
 
-## Changes in v1.1
+Changes in v1.1
+---------------
 
 The following changes were made for v1.1:
 
@@ -95,7 +107,8 @@ The following changes were made for v1.1:
   EPUB and OPC applications.
 
 
-## Legal Stuff
+Legal Stuff
+-----------
 
 Copyright © 2017-2021 by Michael R Sweet.
 
