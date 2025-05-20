@@ -7,7 +7,7 @@
  *
  *     ./dumpzip filename
  *
- * Copyright 2017 by Michael R Sweet.
+ * Copyright 2017-2025 by Michael R Sweet.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -67,7 +67,7 @@ main(int  argc,				/* I - Number of command-line arguments */
      char *argv[])			/* I - Command-line arguments */
 {
   FILE		*fp;			/* File to read from */
-  unsigned char	buffer[8192];		/* Write buffer */
+  unsigned char	buffer[65536];		/* Read buffer */
   unsigned	sig;			/* Signature */
 
 
